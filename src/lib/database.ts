@@ -4,6 +4,19 @@ let db: Database | null = null;
 
 const DB_STORAGE_KEY = 'pioneer-export-db';
 
+// Chunked base64 conversion to avoid stack overflow on large Uint8Arrays
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const chunkSize = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+  }
+  return btoa(binary);
+}
+
 export async function getDatabase(): Promise<Database> {
   if (db) return db;
 
@@ -11,11 +24,16 @@ export async function getDatabase(): Promise<Database> {
     locateFile: () => '/sql-wasm.wasm',
   });
 
-  const saved = localStorage.getItem(DB_STORAGE_KEY);
-  if (saved) {
-    const buf = Uint8Array.from(atob(saved), (c) => c.charCodeAt(0));
-    db = new SQL.Database(buf);
-  } else {
+  try {
+    const saved = localStorage.getItem(DB_STORAGE_KEY);
+    if (saved) {
+      const buf = Uint8Array.from(atob(saved), (c) => c.charCodeAt(0));
+      db = new SQL.Database(buf);
+    } else {
+      db = new SQL.Database();
+    }
+  } catch (e) {
+    console.warn('Failed to restore DB from localStorage, creating fresh:', e);
     db = new SQL.Database();
   }
 
@@ -78,9 +96,13 @@ export async function getDatabase(): Promise<Database> {
 
 export function saveDatabase() {
   if (!db) return;
-  const data = db.export();
-  const b64 = btoa(String.fromCharCode(...data));
-  localStorage.setItem(DB_STORAGE_KEY, b64);
+  try {
+    const data = db.export();
+    const b64 = uint8ArrayToBase64(data);
+    localStorage.setItem(DB_STORAGE_KEY, b64);
+  } catch (e) {
+    console.error('Failed to save database:', e);
+  }
 }
 
 export function exportDatabaseFile(): Uint8Array {
@@ -91,7 +113,7 @@ export function exportDatabaseFile(): Uint8Array {
 export function exportDatabaseBase64(): string {
   if (!db) throw new Error('Database not initialized');
   const data = db.export();
-  return btoa(String.fromCharCode(...data));
+  return uint8ArrayToBase64(data);
 }
 
 export async function restoreDatabase(data: Uint8Array): Promise<void> {
@@ -183,7 +205,7 @@ export async function addTrack(track: Partial<Track>): Promise<number> {
       track.comment || '',
     ]
   );
-  saveDatabase();
+  // Don't save after every single track - batch saves happen after import
   const idResult = db.exec('SELECT last_insert_rowid()');
   return idResult[0].values[0][0] as number;
 }
@@ -247,7 +269,7 @@ export async function addTrackToPlaylist(playlistId: number, trackId: number): P
   const maxPos = db.exec('SELECT COALESCE(MAX(position), 0) FROM playlist_tracks WHERE playlist_id = ?', [playlistId]);
   const nextPos = ((maxPos[0]?.values[0]?.[0] as number) || 0) + 1;
   db.run('INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)', [playlistId, trackId, nextPos]);
-  saveDatabase();
+  // Don't save after every track addition - batch saves happen after import
 }
 
 export async function removeTrackFromPlaylist(playlistId: number, trackId: number): Promise<void> {

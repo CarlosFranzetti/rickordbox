@@ -96,6 +96,13 @@ export async function getDatabase(): Promise<Database> {
     );
   `);
 
+  // Migration: add label column if missing (existing DBs)
+  try {
+    db.exec("SELECT label FROM tracks LIMIT 1");
+  } catch {
+    db.run("ALTER TABLE tracks ADD COLUMN label TEXT DEFAULT ''");
+  }
+
   return db;
 }
 

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useDatabase } from '@/hooks/useDatabase';
 import { AppSidebar } from '@/components/AppSidebar';
 import { TrackTable } from '@/components/TrackTable';
 import { FileImporter } from '@/components/FileImporter';
 import { ExportPreview } from '@/components/ExportPreview';
+import { CreatePlaylistDialog } from '@/components/CreatePlaylistDialog';
 import type { Track } from '@/lib/database';
 import { Loader2 } from 'lucide-react';
 
@@ -14,6 +15,7 @@ const Index = () => {
   const [activeView, setActiveView] = useState<View>('collection');
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [playlistTracks, setPlaylistTracks] = useState<Track[]>([]);
+  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
 
   useEffect(() => {
     if (activePlaylistId) {
@@ -29,13 +31,6 @@ const Index = () => {
   const handlePlaylistSelect = (id: number) => {
     setActivePlaylistId(id);
     setActiveView('collection');
-  };
-
-  const handleCreatePlaylist = async () => {
-    const name = prompt('Playlist name:');
-    if (name?.trim()) {
-      await db.createPlaylist(name.trim());
-    }
   };
 
   if (!db.ready) {
@@ -57,7 +52,7 @@ const Index = () => {
         activePlaylistId={activePlaylistId}
         onViewChange={handleViewChange}
         onPlaylistSelect={handlePlaylistSelect}
-        onCreatePlaylist={handleCreatePlaylist}
+        onCreatePlaylist={() => setShowCreatePlaylist(true)}
         onDeletePlaylist={db.deletePlaylist}
         trackCount={db.tracks.length}
       />
@@ -96,8 +91,15 @@ const Index = () => {
           />
         )}
       </main>
+
+      <CreatePlaylistDialog
+        open={showCreatePlaylist}
+        onOpenChange={setShowCreatePlaylist}
+        onCreate={(name) => db.createPlaylist(name)}
+      />
     </div>
   );
 };
+
 
 export default Index;

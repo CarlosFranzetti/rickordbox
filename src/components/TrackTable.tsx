@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { Trash2, Plus, MoreHorizontal, Search, X } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Trash2, Plus, MoreHorizontal, Search, X, GripVertical } from 'lucide-react';
 import type { Track, Playlist } from '@/lib/database';
 import { formatDuration } from '@/lib/database';
 import { Input } from '@/components/ui/input';
@@ -21,8 +21,10 @@ interface TrackTableProps {
   onUpdateTrack?: (id: number, updates: Partial<Track>) => void;
   onAddToPlaylist?: (playlistId: number, trackId: number) => void;
   onRemoveFromPlaylist?: (trackId: number) => void;
+  onReorderTracks?: (trackIds: number[]) => void;
   showRemoveFromPlaylist?: boolean;
   showSearch?: boolean;
+  allowReorder?: boolean;
 }
 
 // Inline editable cell
@@ -89,7 +91,6 @@ function EditableCell({
   );
 }
 
-// Unique keys from tracks
 function getUniqueKeys(tracks: Track[]): string[] {
   const keys = new Set<string>();
   tracks.forEach((t) => t.key && keys.add(t.key));
@@ -104,8 +105,10 @@ export function TrackTable({
   onUpdateTrack,
   onAddToPlaylist,
   onRemoveFromPlaylist,
+  onReorderTracks,
   showRemoveFromPlaylist,
   showSearch = false,
+  allowReorder = false,
 }: TrackTableProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,9 +117,12 @@ export function TrackTable({
   const [bpmMax, setBpmMax] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
+  // Drag-and-drop state
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
   const uniqueKeys = getUniqueKeys(tracks);
 
-  // Filter tracks
   const filtered = tracks.filter((t) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -134,6 +140,7 @@ export function TrackTable({
   });
 
   const hasActiveFilters = searchQuery || filterKey || bpmMin || bpmMax;
+  const canReorder = allowReorder && onReorderTracks && !hasActiveFilters;
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -141,6 +148,17 @@ export function TrackTable({
     setBpmMin('');
     setBpmMax('');
   };
+
+  const handleDragEnd = useCallback(() => {
+    if (dragIdx !== null && overIdx !== null && dragIdx !== overIdx && canReorder) {
+      const ids = filtered.map((t) => t.id);
+      const [moved] = ids.splice(dragIdx, 1);
+      ids.splice(overIdx, 0, moved);
+      onReorderTracks!(ids);
+    }
+    setDragIdx(null);
+    setOverIdx(null);
+  }, [dragIdx, overIdx, canReorder, filtered, onReorderTracks]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -219,7 +237,8 @@ export function TrackTable({
       )}
 
       {/* Table Header */}
-      <div className="grid grid-cols-[2fr_1.5fr_1fr_80px_60px_40px] gap-2 px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground border-b border-border">
+      <div className={`grid gap-2 px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground border-b border-border ${canReorder ? 'grid-cols-[24px_2fr_1.5fr_1fr_80px_60px_40px]' : 'grid-cols-[2fr_1.5fr_1fr_80px_60px_40px]'}`}>
+        {canReorder && <span></span>}
         <span>Title</span>
         <span>Artist</span>
         <span>Album</span>
@@ -235,14 +254,28 @@ export function TrackTable({
             {hasActiveFilters ? 'No tracks match filters' : 'No tracks found'}
           </div>
         )}
-        {filtered.map((track) => (
+        {filtered.map((track, idx) => (
           <div
             key={track.id}
             onClick={() => setSelectedId(track.id)}
-            className={`track-row grid grid-cols-[2fr_1.5fr_1fr_80px_60px_40px] gap-2 px-4 py-2 text-sm items-center ${
-              selectedId === track.id ? 'track-row-selected' : ''
+            draggable={canReorder}
+            onDragStart={() => canReorder && setDragIdx(idx)}
+            onDragOver={(e) => {
+              if (canReorder) {
+                e.preventDefault();
+                setOverIdx(idx);
+              }
+            }}
+            onDragEnd={handleDragEnd}
+            className={`track-row grid gap-2 px-4 py-2 text-sm items-center ${
+              canReorder ? 'grid-cols-[24px_2fr_1.5fr_1fr_80px_60px_40px]' : 'grid-cols-[2fr_1.5fr_1fr_80px_60px_40px]'
+            } ${selectedId === track.id ? 'track-row-selected' : ''} ${
+              dragIdx !== null && overIdx === idx && dragIdx !== idx ? 'border-t-2 !border-t-primary' : ''
             }`}
           >
+            {canReorder && (
+              <GripVertical className="w-3.5 h-3.5 text-muted-foreground cursor-grab" />
+            )}
             <div className="truncate">
               {onUpdateTrack ? (
                 <EditableCell

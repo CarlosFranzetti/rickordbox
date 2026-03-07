@@ -184,67 +184,71 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
     // Collect imported tracks grouped by folder
     const folderTracks = new Map<string, number[]>();
 
-    let idx = 0;
-    for (const file of audioFiles) {
-      idx++;
-      setProgress({ current: idx, total: audioFiles.length, phase: file.name });
+    try {
+      let idx = 0;
+      for (const file of audioFiles) {
+        idx++;
+        setProgress({ current: idx, total: audioFiles.length, phase: file.name });
 
-      try {
-        const trackData = await parseMetadata(file);
-        const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
-        trackData.file_path = filePath;
+        try {
+          const trackData = await parseMetadata(file);
+          const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
+          trackData.file_path = filePath;
 
-        const trackId = await onImport(trackData);
-        newResults.push({ fileName: file.name, status: 'success', trackId: trackId ?? undefined });
+          const trackId = await onImport(trackData);
+          newResults.push({ fileName: file.name, status: 'success', trackId: trackId ?? undefined });
 
-        // Group by folder for playlist creation
-        if (trackId) {
-          const parts = filePath.split('/');
-          if (parts.length >= 2) {
-            const folder = parts.slice(0, -1).join('/');
-            if (activeSelectedFolders.has(folder)) {
-              if (!folderTracks.has(folder)) folderTracks.set(folder, []);
-              folderTracks.get(folder)!.push(trackId);
+          // Group by folder for playlist creation
+          if (trackId) {
+            const parts = filePath.split('/');
+            if (parts.length >= 2) {
+              const folder = parts.slice(0, -1).join('/');
+              if (activeSelectedFolders.has(folder)) {
+                if (!folderTracks.has(folder)) folderTracks.set(folder, []);
+                folderTracks.get(folder)!.push(trackId);
+              }
             }
           }
-        }
-      } catch (err) {
-        console.error('Import failed for', file.name, err);
-        newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
-      }
-
-      if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
-    }
-
-    // Save database after all track imports
-    saveDatabase();
-
-    // Create playlists from selected folders and add tracks
-    if (activeSelectedFolders.size > 0 && folderTracks.size > 0) {
-      setProgress({ current: 0, total: folderTracks.size, phase: 'Creating playlists…' });
-      let plIdx = 0;
-      for (const [folder, trackIds] of folderTracks) {
-        plIdx++;
-        const folderName = folder.replace(/\//g, ' / ');
-        setProgress({ current: plIdx, total: folderTracks.size, phase: `Playlist: ${folderName}` });
-        try {
-          const playlistId = await onCreatePlaylist(folderName);
-          for (const tid of trackIds) {
-            await onAddToPlaylist(playlistId, tid);
-          }
         } catch (err) {
-          console.error('Playlist creation failed for', folder, err);
+          console.error('Import failed for', file.name, err);
+          newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
         }
-      }
-      // Save after all playlists created
-      saveDatabase();
-      await onImportComplete?.();
-    }
 
-    setResults(newResults);
-    setImporting(false);
-    setPendingFiles(null);
-    setPendingBasePaths(null);
+        if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
+      }
+
+      // Save database after all track imports
+      saveDatabase();
+
+      // Create playlists from selected folders and add tracks
+      if (activeSelectedFolders.size > 0 && folderTracks.size > 0) {
+        setProgress({ current: 0, total: folderTracks.size, phase: 'Creating playlists…' });
+        let plIdx = 0;
+        for (const [folder, trackIds] of folderTracks) {
+          plIdx++;
+          const folderName = folder.replace(/\//g, ' / ');
+          setProgress({ current: plIdx, total: folderTracks.size, phase: `Playlist: ${folderName}` });
+          try {
+            const playlistId = await onCreatePlaylist(folderName);
+            for (const tid of trackIds) {
+              await onAddToPlaylist(playlistId, tid);
+            }
+          } catch (err) {
+            console.error('Playlist creation failed for', folder, err);
+          }
+        }
+
+        // Save after all playlists created
+        saveDatabase();
+      }
+
+      await onImportComplete?.();
+      setResults(newResults);
+    } finally {
+      setImporting(false);
+      setPendingFiles(null);
+      setPendingBasePaths(null);
+    }
   }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, onImportComplete, onCreatePlaylist, onAddToPlaylist]);
 
   const handleDrop = useCallback(

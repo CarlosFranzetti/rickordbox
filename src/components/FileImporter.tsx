@@ -217,7 +217,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
     saveDatabase();
 
     // Create playlists from selected folders and add tracks
-    if (selectedFolders.size > 0 && folderTracks.size > 0) {
+    if (activeSelectedFolders.size > 0 && folderTracks.size > 0) {
       setProgress({ current: 0, total: folderTracks.size, phase: 'Creating playlists…' });
       let plIdx = 0;
       for (const [folder, trackIds] of folderTracks) {

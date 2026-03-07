@@ -253,12 +253,17 @@ export async function getAllPlaylists(): Promise<Playlist[]> {
   });
 }
 
-export async function createPlaylist(name: string, description = ''): Promise<number> {
+export async function createPlaylistFast(name: string, description = ''): Promise<number> {
   const db = await getDatabase();
   db.run('INSERT INTO playlists (name, description) VALUES (?, ?)', [name, description]);
-  saveDatabase();
   const idResult = db.exec('SELECT last_insert_rowid()');
   return idResult[0].values[0][0] as number;
+}
+
+export async function createPlaylist(name: string, description = ''): Promise<number> {
+  const id = await createPlaylistFast(name, description);
+  saveDatabase();
+  return id;
 }
 
 export async function deletePlaylist(id: number): Promise<void> {

@@ -189,7 +189,7 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
 
     // Track file path → imported track ID mapping
     // We'll collect all imported tracks grouped by folder
-    const folderTracks = new Map<string, number[]>();
+    const _folderTracks = new Map<string, number[]>();
 
     let idx = 0;
     for (const file of audioFiles) {

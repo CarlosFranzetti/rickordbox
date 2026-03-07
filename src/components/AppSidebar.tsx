@@ -1,8 +1,8 @@
 import { ReactNode } from 'react';
-import { Music, ListMusic, Upload, HardDrive, Plus, Trash2, Disc3 } from 'lucide-react';
+import { Music, ListMusic, Upload, HardDrive, Plus, Trash2, Disc3, Settings } from 'lucide-react';
 import type { Playlist } from '@/lib/database';
 
-type View = 'collection' | 'import' | 'export';
+type View = 'collection' | 'import' | 'export' | 'settings';
 
 interface AppSidebarProps {
   playlists: Playlist[];
@@ -12,6 +12,7 @@ interface AppSidebarProps {
   onPlaylistSelect: (id: number) => void;
   onCreatePlaylist: () => void;
   onDeletePlaylist: (id: number) => void;
+  onOpenSettings: () => void;
   trackCount: number;
   footerSlot?: ReactNode;
 }
@@ -24,6 +25,7 @@ export function AppSidebar({
   onPlaylistSelect,
   onCreatePlaylist,
   onDeletePlaylist,
+  onOpenSettings,
   trackCount,
   footerSlot,
 }: AppSidebarProps) {
@@ -61,6 +63,13 @@ export function AppSidebar({
         >
           <HardDrive className="w-4 h-4" />
           <span>USB Export</span>
+        </button>
+        <button
+          onClick={onOpenSettings}
+          className="sidebar-item w-full"
+        >
+          <Settings className="w-4 h-4" />
+          <span>Settings</span>
         </button>
       </nav>
 

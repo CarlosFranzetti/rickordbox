@@ -485,9 +485,20 @@ async function readEntry(
     allFiles.push(file);
   } else if (entry.isDirectory) {
     const dirReader = (entry as FileSystemDirectoryEntry).createReader();
-    const entries = await new Promise<FileSystemEntry[]>((resolve) =>
-      dirReader.readEntries(resolve)
-    );
+
+    const readAllEntries = async (): Promise<FileSystemEntry[]> => {
+      const allEntries: FileSystemEntry[] = [];
+      while (true) {
+        const batch = await new Promise<FileSystemEntry[]>((resolve) =>
+          dirReader.readEntries(resolve)
+        );
+        if (batch.length === 0) break;
+        allEntries.push(...batch);
+      }
+      return allEntries;
+    };
+
+    const entries = await readAllEntries();
     for (const child of entries) {
       await readEntry(child, path ? `${path}/${entry.name}` : entry.name, allFiles, basePaths);
     }

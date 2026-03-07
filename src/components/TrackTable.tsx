@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Trash2, Plus, MoreHorizontal } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Trash2, Plus, MoreHorizontal, Search, X } from 'lucide-react';
 import type { Track, Playlist } from '@/lib/database';
 import { formatDuration } from '@/lib/database';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,9 +18,82 @@ interface TrackTableProps {
   playlists: Playlist[];
   title: string;
   onDeleteTrack?: (id: number) => void;
+  onUpdateTrack?: (id: number, updates: Partial<Track>) => void;
   onAddToPlaylist?: (playlistId: number, trackId: number) => void;
   onRemoveFromPlaylist?: (trackId: number) => void;
   showRemoveFromPlaylist?: boolean;
+  showSearch?: boolean;
+}
+
+// Inline editable cell
+function EditableCell({
+  value,
+  onSave,
+  className = '',
+  type = 'text',
+}: {
+  value: string | number;
+  onSave: (val: string) => void;
+  className?: string;
+  type?: 'text' | 'number';
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = () => {
+    setEditing(false);
+    if (draft !== String(value)) {
+      onSave(draft);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') {
+            setDraft(String(value));
+            setEditing(false);
+          }
+        }}
+        type={type}
+        className={`bg-secondary/80 border border-primary/40 rounded px-1.5 py-0.5 text-foreground outline-none focus:border-primary w-full ${className}`}
+      />
+    );
+  }
+
+  return (
+    <span
+      onDoubleClick={() => {
+        setDraft(String(value));
+        setEditing(true);
+      }}
+      className={`truncate cursor-default hover:bg-secondary/40 rounded px-0.5 transition-colors ${className}`}
+      title="Double-click to edit"
+    >
+      {value || '—'}
+    </span>
+  );
+}
+
+// Unique keys from tracks
+function getUniqueKeys(tracks: Track[]): string[] {
+  const keys = new Set<string>();
+  tracks.forEach((t) => t.key && keys.add(t.key));
+  return Array.from(keys).sort();
 }
 
 export function TrackTable({
@@ -27,18 +101,122 @@ export function TrackTable({
   playlists,
   title,
   onDeleteTrack,
+  onUpdateTrack,
   onAddToPlaylist,
   onRemoveFromPlaylist,
   showRemoveFromPlaylist,
+  showSearch = false,
 }: TrackTableProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterKey, setFilterKey] = useState('');
+  const [bpmMin, setBpmMin] = useState('');
+  const [bpmMax, setBpmMax] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  const uniqueKeys = getUniqueKeys(tracks);
+
+  // Filter tracks
+  const filtered = tracks.filter((t) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (
+        !t.title.toLowerCase().includes(q) &&
+        !t.artist.toLowerCase().includes(q) &&
+        !t.album.toLowerCase().includes(q)
+      )
+        return false;
+    }
+    if (filterKey && t.key !== filterKey) return false;
+    if (bpmMin && t.bpm < Number(bpmMin)) return false;
+    if (bpmMax && t.bpm > Number(bpmMax)) return false;
+    return true;
+  });
+
+  const hasActiveFilters = searchQuery || filterKey || bpmMin || bpmMax;
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setFilterKey('');
+    setBpmMin('');
+    setBpmMax('');
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="panel-header flex items-center justify-between">
         <span>{title}</span>
-        <span className="text-[10px] font-mono">{tracks.length} tracks</span>
+        <div className="flex items-center gap-2">
+          {hasActiveFilters && (
+            <span className="text-[10px] font-mono text-primary">
+              {filtered.length}/{tracks.length}
+            </span>
+          )}
+          <span className="text-[10px] font-mono">{tracks.length} tracks</span>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-1 rounded transition-colors ${showFilters ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
+
+      {/* Search & Filters Bar */}
+      {showFilters && (
+        <div className="px-4 py-2 border-b border-border bg-card/50 flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[180px] max-w-[300px]">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search title, artist, album…"
+              className="h-7 pl-7 text-xs bg-secondary/60 border-border"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground font-mono">BPM</span>
+            <input
+              value={bpmMin}
+              onChange={(e) => setBpmMin(e.target.value)}
+              placeholder="min"
+              type="number"
+              className="w-14 h-7 text-xs bg-secondary/60 border border-border rounded px-1.5 text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+            />
+            <span className="text-muted-foreground text-xs">–</span>
+            <input
+              value={bpmMax}
+              onChange={(e) => setBpmMax(e.target.value)}
+              placeholder="max"
+              type="number"
+              className="w-14 h-7 text-xs bg-secondary/60 border border-border rounded px-1.5 text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+            />
+          </div>
+          {uniqueKeys.length > 0 && (
+            <select
+              value={filterKey}
+              onChange={(e) => setFilterKey(e.target.value)}
+              className="h-7 text-xs bg-secondary/60 border border-border rounded px-1.5 text-foreground outline-none focus:border-primary"
+            >
+              <option value="">All keys</option>
+              {uniqueKeys.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          )}
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+            >
+              <X className="w-3 h-3" />
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Table Header */}
       <div className="grid grid-cols-[2fr_1.5fr_1fr_80px_60px_40px] gap-2 px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground border-b border-border">
@@ -52,12 +230,12 @@ export function TrackTable({
 
       {/* Track Rows */}
       <div className="flex-1 overflow-y-auto">
-        {tracks.length === 0 && (
+        {filtered.length === 0 && (
           <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
-            No tracks found
+            {hasActiveFilters ? 'No tracks match filters' : 'No tracks found'}
           </div>
         )}
-        {tracks.map((track) => (
+        {filtered.map((track) => (
           <div
             key={track.id}
             onClick={() => setSelectedId(track.id)}
@@ -66,13 +244,48 @@ export function TrackTable({
             }`}
           >
             <div className="truncate">
-              <span className="text-foreground">{track.title}</span>
+              {onUpdateTrack ? (
+                <EditableCell
+                  value={track.title}
+                  onSave={(v) => onUpdateTrack(track.id, { title: v })}
+                  className="text-foreground text-sm"
+                />
+              ) : (
+                <span className="text-foreground">{track.title}</span>
+              )}
             </div>
-            <span className="truncate text-secondary-foreground">{track.artist}</span>
+            <div className="truncate">
+              {onUpdateTrack ? (
+                <EditableCell
+                  value={track.artist}
+                  onSave={(v) => onUpdateTrack(track.id, { artist: v })}
+                  className="text-secondary-foreground text-sm"
+                />
+              ) : (
+                <span className="truncate text-secondary-foreground">{track.artist}</span>
+              )}
+            </div>
             <span className="truncate text-muted-foreground text-xs">{track.album}</span>
             <div className="flex gap-1">
-              {track.bpm > 0 && <span className="badge-bpm">{track.bpm.toFixed(0)}</span>}
-              {track.key && <span className="badge-key">{track.key}</span>}
+              {onUpdateTrack ? (
+                <>
+                  <EditableCell
+                    value={track.bpm > 0 ? track.bpm.toFixed(0) : ''}
+                    onSave={(v) => onUpdateTrack(track.id, { bpm: parseFloat(v) || 0 })}
+                    className="badge-bpm text-xs font-mono w-8 text-center"
+                  />
+                  <EditableCell
+                    value={track.key || ''}
+                    onSave={(v) => onUpdateTrack(track.id, { key: v })}
+                    className="badge-key text-xs font-mono w-8 text-center"
+                  />
+                </>
+              ) : (
+                <>
+                  {track.bpm > 0 && <span className="badge-bpm">{track.bpm.toFixed(0)}</span>}
+                  {track.key && <span className="badge-key">{track.key}</span>}
+                </>
+              )}
             </div>
             <span className="text-xs font-mono text-muted-foreground">
               {formatDuration(track.duration)}

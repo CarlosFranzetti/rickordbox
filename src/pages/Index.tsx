@@ -64,7 +64,9 @@ const Index = () => {
             playlists={db.playlists}
             title="Collection"
             onDeleteTrack={db.deleteTrack}
+            onUpdateTrack={db.updateTrack}
             onAddToPlaylist={db.addToPlaylist}
+            showSearch
           />
         )}
 
@@ -74,11 +76,13 @@ const Index = () => {
             playlists={db.playlists}
             title={db.playlists.find((p) => p.id === activePlaylistId)?.name || 'Playlist'}
             onDeleteTrack={db.deleteTrack}
+            onUpdateTrack={db.updateTrack}
             onAddToPlaylist={db.addToPlaylist}
             onRemoveFromPlaylist={(trackId) =>
               db.removeFromPlaylist(activePlaylistId, trackId)
             }
             showRemoveFromPlaylist
+            showSearch
           />
         )}
 

@@ -103,8 +103,8 @@ const Index = () => {
           <FileImporter
             onImport={db.addTrackFast}
             onImportComplete={db.refresh}
-            onCreatePlaylist={db.createPlaylist}
-            onAddToPlaylist={db.addToPlaylist}
+            onCreatePlaylist={db.createPlaylistFast}
+            onAddToPlaylist={db.addToPlaylistFast}
           />
         )}
 

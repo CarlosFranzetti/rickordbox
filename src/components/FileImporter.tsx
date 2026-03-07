@@ -8,6 +8,7 @@ import * as mm from 'music-metadata-browser';
 
 interface FileImporterProps {
   onImport: (track: Partial<Track>) => Promise<number>;
+  onImportComplete?: () => Promise<void> | void;
   onCreatePlaylist: (name: string) => Promise<number>;
   onAddToPlaylist: (playlistId: number, trackId: number) => Promise<void>;
 }
@@ -48,7 +49,7 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
   return Array.from(folderMap.entries())
     .map(([path, count]) => ({
       path,
-      name: path.split('/').pop() || path,
+      name: path,
       fileCount: count,
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
@@ -95,7 +96,7 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
   return { title, artist, album, genre, bpm, key, duration, bitrate, sample_rate: sampleRate, year, comment, file_name: file.name, file_size: file.size };
 }
 
-export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: FileImporterProps) {
+export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onAddToPlaylist }: FileImporterProps) {
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<ImportResult[]>([]);
@@ -140,13 +141,13 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
 
       // Save database once after all imports
       saveDatabase();
-
+      await onImportComplete?.();
       setResults(newResults);
       setImporting(false);
       setPendingFiles(null);
       setPendingBasePaths(null);
     },
-    [onImport]
+    [onImport, onImportComplete]
   );
 
   const handleFilesReceived = useCallback(
@@ -166,9 +167,10 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
     [processFiles]
   );
 
-  const handleImportWithPlaylists = useCallback(async () => {
+  const handleImportWithPlaylists = useCallback(async (selectedOverride?: Set<string>) => {
     if (!pendingFiles) return;
     const basePaths = pendingBasePaths || undefined;
+    const activeSelectedFolders = selectedOverride ?? selectedFolders;
 
     setImporting(true);
     setShowFolderStep(false);
@@ -197,7 +199,7 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
           const parts = filePath.split('/');
           if (parts.length >= 2) {
             const folder = parts.slice(0, -1).join('/');
-            if (selectedFolders.has(folder)) {
+            if (activeSelectedFolders.has(folder)) {
               if (!folderTracks.has(folder)) folderTracks.set(folder, []);
               folderTracks.get(folder)!.push(trackId);
             }
@@ -215,12 +217,12 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
     saveDatabase();
 
     // Create playlists from selected folders and add tracks
-    if (selectedFolders.size > 0 && folderTracks.size > 0) {
+    if (activeSelectedFolders.size > 0 && folderTracks.size > 0) {
       setProgress({ current: 0, total: folderTracks.size, phase: 'Creating playlists…' });
       let plIdx = 0;
       for (const [folder, trackIds] of folderTracks) {
         plIdx++;
-        const folderName = folder.split('/').pop() || folder;
+        const folderName = folder.replace(/\//g, ' / ');
         setProgress({ current: plIdx, total: folderTracks.size, phase: `Playlist: ${folderName}` });
         try {
           const playlistId = await onCreatePlaylist(folderName);
@@ -233,13 +235,14 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
       }
       // Save after all playlists created
       saveDatabase();
+      await onImportComplete?.();
     }
 
     setResults(newResults);
     setImporting(false);
     setPendingFiles(null);
     setPendingBasePaths(null);
-  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, onCreatePlaylist, onAddToPlaylist]);
+  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, onImportComplete, onCreatePlaylist, onAddToPlaylist]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
@@ -333,12 +336,13 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
             ))}
           </div>
           <div className="flex gap-2 pt-1">
-            <Button size="sm" onClick={handleImportWithPlaylists}>
+            <Button size="sm" onClick={() => handleImportWithPlaylists()}>
               Import {pendingFiles?.filter(f => isAudioFile(f.name)).length} tracks
             </Button>
             <Button variant="outline" size="sm" onClick={() => {
-              setSelectedFolders(new Set());
-              handleImportWithPlaylists();
+              const none = new Set<string>();
+              setSelectedFolders(none);
+              handleImportWithPlaylists(none);
             }}>
               Import without playlists
             </Button>

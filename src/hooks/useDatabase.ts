@@ -88,11 +88,16 @@ export function useDatabase() {
     setLoading(false);
   }, []);
 
-  const handleAddTrack = useCallback(async (track: Partial<Track>) => {
+  const handleAddTrackFast = useCallback(async (track: Partial<Track>) => {
     const id = await addTrack(track);
+    return id;
+  }, []);
+
+  const handleAddTrack = useCallback(async (track: Partial<Track>) => {
+    const id = await handleAddTrackFast(track);
     await refresh();
     return id;
-  }, [refresh]);
+  }, [handleAddTrackFast, refresh]);
 
   const handleDeleteTrack = useCallback(async (id: number) => {
     await deleteTrack(id);
@@ -173,6 +178,7 @@ export function useDatabase() {
     playlists,
     refresh,
     addTrack: handleAddTrack,
+    addTrackFast: handleAddTrackFast,
     deleteTrack: handleDeleteTrack,
     updateTrack: handleUpdateTrack,
     createPlaylist: handleCreatePlaylist,

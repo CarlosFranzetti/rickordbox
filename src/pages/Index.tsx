@@ -101,7 +101,8 @@ const Index = () => {
 
         {activeView === 'import' && (
           <FileImporter
-            onImport={db.addTrack}
+            onImport={db.addTrackFast}
+            onImportComplete={db.refresh}
             onCreatePlaylist={db.createPlaylist}
             onAddToPlaylist={db.addToPlaylist}
           />

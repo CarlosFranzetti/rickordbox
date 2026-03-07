@@ -199,7 +199,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
           const parts = filePath.split('/');
           if (parts.length >= 2) {
             const folder = parts.slice(0, -1).join('/');
-            if (selectedFolders.has(folder)) {
+            if (activeSelectedFolders.has(folder)) {
               if (!folderTracks.has(folder)) folderTracks.set(folder, []);
               folderTracks.get(folder)!.push(trackId);
             }

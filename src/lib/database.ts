@@ -59,6 +59,7 @@ export async function getDatabase(): Promise<Database> {
       file_size INTEGER DEFAULT 0,
       file_hash TEXT DEFAULT '',
       cover_art_url TEXT DEFAULT '',
+      label TEXT DEFAULT '',
       date_added TEXT DEFAULT (datetime('now')),
       year INTEGER DEFAULT 0,
       comment TEXT DEFAULT '',
@@ -94,6 +95,13 @@ export async function getDatabase(): Promise<Database> {
       fetched_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  // Migration: add label column if missing (existing DBs)
+  try {
+    db.exec("SELECT label FROM tracks LIMIT 1");
+  } catch {
+    db.run("ALTER TABLE tracks ADD COLUMN label TEXT DEFAULT ''");
+  }
 
   return db;
 }
@@ -160,6 +168,7 @@ export interface Track {
   file_size: number;
   file_hash: string;
   cover_art_url: string;
+  label: string;
   date_added: string;
   year: number;
   comment: string;
@@ -207,6 +216,8 @@ export async function addTrack(track: Partial<Track>): Promise<number> {
       if (track.sample_rate) updates.sample_rate = track.sample_rate;
       if (track.year) updates.year = track.year;
       if (track.comment) updates.comment = track.comment;
+      if (track.label) updates.label = track.label;
+      if (track.cover_art_url) updates.cover_art_url = track.cover_art_url;
       if (track.file_size) updates.file_size = track.file_size;
       if (Object.keys(updates).length > 0) {
         const fields = Object.keys(updates).map((k) => `${k} = ?`);
@@ -218,8 +229,8 @@ export async function addTrack(track: Partial<Track>): Promise<number> {
   }
 
   db.run(
-    `INSERT INTO tracks (title, artist, album, genre, bpm, key, duration, bitrate, sample_rate, file_name, file_path, file_size, file_hash, year, comment)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tracks (title, artist, album, genre, bpm, key, duration, bitrate, sample_rate, file_name, file_path, file_size, file_hash, year, comment, label, cover_art_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       track.title || 'Unknown',
       track.artist || 'Unknown',
@@ -236,6 +247,8 @@ export async function addTrack(track: Partial<Track>): Promise<number> {
       track.file_hash || '',
       track.year || 0,
       track.comment || '',
+      track.label || '',
+      track.cover_art_url || '',
     ]
   );
   // Don't save after every single track - batch saves happen after import

@@ -139,6 +139,8 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
   let bitrate = 0;
   let sampleRate = 0;
   let comment = '';
+  let label = '';
+  let coverArtUrl = '';
 
   try {
     const metadata = await mm.parseBlob(file);
@@ -151,10 +153,25 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
     if (common.bpm) bpm = common.bpm;
     if (common.key) key = common.key;
     if (common.year) year = common.year;
+    if (common.label?.length) label = common.label.join(', ');
     if (common.comment?.length) comment = common.comment.map((c: any) => (typeof c === 'string' ? c : c.text || '')).join('; ');
     if (format.duration) duration = format.duration;
     if (format.bitrate) bitrate = Math.round(format.bitrate / 1000);
     if (format.sampleRate) sampleRate = format.sampleRate;
+
+    // Extract embedded cover art
+    if (common.picture?.length) {
+      const pic = common.picture[0];
+      const chunkSize = 8192;
+      const parts: string[] = [];
+      for (let i = 0; i < pic.data.length; i += chunkSize) {
+        const chunk = pic.data.subarray(i, Math.min(i + chunkSize, pic.data.length));
+        let bin = '';
+        for (let j = 0; j < chunk.length; j++) bin += String.fromCharCode(chunk[j]);
+        parts.push(bin);
+      }
+      coverArtUrl = `data:${pic.format};base64,${btoa(parts.join(''))}`;
+    }
   } catch (err) {
     console.warn('Metadata parse failed for', file.name, err);
     const dashSplit = title.split(' - ');
@@ -176,6 +193,8 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
     sample_rate: sampleRate,
     year,
     comment,
+    label,
+    cover_art_url: coverArtUrl,
     file_name: file.name,
     file_size: file.size,
   };

@@ -103,6 +103,7 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
         if (common.bpm && common.bpm !== track.bpm) updates.bpm = common.bpm;
         if (common.key && common.key !== track.key) updates.key = common.key;
         if (common.year && common.year !== track.year) updates.year = common.year;
+        if (common.label?.length) { const l = common.label.join(', '); if (l !== track.label) updates.label = l; }
         if (common.comment?.length) {
           const c = common.comment.map((x: any) => typeof x === 'string' ? x : x.text || '').join('; ');
           if (c !== track.comment) updates.comment = c;
@@ -110,6 +111,20 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
         if (format.duration && format.duration !== track.duration) updates.duration = format.duration;
         if (format.bitrate) { const br = Math.round(format.bitrate / 1000); if (br !== track.bitrate) updates.bitrate = br; }
         if (format.sampleRate && format.sampleRate !== track.sample_rate) updates.sample_rate = format.sampleRate;
+
+        // Extract embedded cover art
+        if (common.picture?.length && !track.cover_art_url) {
+          const pic = common.picture[0];
+          const chunkSize = 8192;
+          const parts: string[] = [];
+          for (let i = 0; i < pic.data.length; i += chunkSize) {
+            const chunk = pic.data.subarray(i, Math.min(i + chunkSize, pic.data.length));
+            let bin = '';
+            for (let j = 0; j < chunk.length; j++) bin += String.fromCharCode(chunk[j]);
+            parts.push(bin);
+          }
+          updates.cover_art_url = `data:${pic.format};base64,${btoa(parts.join(''))}`;
+        }
 
         if (Object.keys(updates).length > 0) {
           await onUpdateTrack(track.id, updates);

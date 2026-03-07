@@ -8,6 +8,7 @@ import * as mm from 'music-metadata-browser';
 
 interface FileImporterProps {
   onImport: (track: Partial<Track>) => Promise<number>;
+  onImportComplete?: () => Promise<void> | void;
   onCreatePlaylist: (name: string) => Promise<number>;
   onAddToPlaylist: (playlistId: number, trackId: number) => Promise<void>;
 }

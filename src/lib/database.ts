@@ -7,14 +7,18 @@ const DB_STORAGE_KEY = 'pioneer-export-db';
 // Chunked base64 conversion to avoid stack overflow on large Uint8Arrays
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   const chunkSize = 8192;
-  let binary = '';
+  const parts: string[] = [];
+
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    let binaryChunk = '';
     for (let j = 0; j < chunk.length; j++) {
-      binary += String.fromCharCode(chunk[j]);
+      binaryChunk += String.fromCharCode(chunk[j]);
     }
+    parts.push(binaryChunk);
   }
-  return btoa(binary);
+
+  return btoa(parts.join(''));
 }
 
 export async function getDatabase(): Promise<Database> {

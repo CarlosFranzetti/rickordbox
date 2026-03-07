@@ -83,19 +83,37 @@ export function saveDatabase() {
   localStorage.setItem(DB_STORAGE_KEY, b64);
 }
 
-// Backup: export raw database bytes
 export function exportDatabaseFile(): Uint8Array {
   if (!db) throw new Error('Database not initialized');
   return db.export();
 }
 
-// Restore: replace database from raw bytes
+export function exportDatabaseBase64(): string {
+  if (!db) throw new Error('Database not initialized');
+  const data = db.export();
+  return btoa(String.fromCharCode(...data));
+}
+
 export async function restoreDatabase(data: Uint8Array): Promise<void> {
   const SQL = await initSqlJs({
     locateFile: () => '/sql-wasm.wasm',
   });
   if (db) db.close();
   db = new SQL.Database(data);
+  saveDatabase();
+}
+
+export async function restoreDatabaseFromBase64(b64: string): Promise<void> {
+  const buf = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  await restoreDatabase(buf);
+}
+
+export async function clearAllData(): Promise<void> {
+  const db = await getDatabase();
+  db.run('DELETE FROM playlist_tracks');
+  db.run('DELETE FROM playlists');
+  db.run('DELETE FROM tracks');
+  db.run('DELETE FROM discogs_cache');
   saveDatabase();
 }
 
@@ -251,7 +269,6 @@ export async function getPlaylistTracks(playlistId: number): Promise<Track[]> {
   return results[0].values.map((row) => rowToTrack(results[0].columns, row));
 }
 
-// Reorder tracks in a playlist
 export async function reorderPlaylistTracks(playlistId: number, trackIds: number[]): Promise<void> {
   const db = await getDatabase();
   trackIds.forEach((trackId, idx) => {
@@ -320,6 +337,19 @@ export async function generateExportManifest(playlistIds: number[]): Promise<Exp
   }
 
   return manifest;
+}
+
+// Get counts for backup metadata
+export function getTrackCount(): number {
+  if (!db) return 0;
+  const r = db.exec('SELECT COUNT(*) FROM tracks');
+  return (r[0]?.values[0]?.[0] as number) || 0;
+}
+
+export function getPlaylistCount(): number {
+  if (!db) return 0;
+  const r = db.exec('SELECT COUNT(*) FROM playlists');
+  return (r[0]?.values[0]?.[0] as number) || 0;
 }
 
 // Helpers

@@ -6,10 +6,11 @@ import { FileImporter } from '@/components/FileImporter';
 import { ExportPreview } from '@/components/ExportPreview';
 import { CreatePlaylistDialog } from '@/components/CreatePlaylistDialog';
 import { DatabaseTools } from '@/components/DatabaseTools';
+import { SettingsPanel } from '@/components/SettingsPanel';
 import type { Track } from '@/lib/database';
 import { Loader2 } from 'lucide-react';
 
-type View = 'collection' | 'import' | 'export';
+type View = 'collection' | 'import' | 'export' | 'settings';
 
 const Index = () => {
   const db = useDatabase();
@@ -17,6 +18,7 @@ const Index = () => {
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [playlistTracks, setPlaylistTracks] = useState<Track[]>([]);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     if (activePlaylistId) {
@@ -25,6 +27,10 @@ const Index = () => {
   }, [activePlaylistId, db.tracks]);
 
   const handleViewChange = (view: View) => {
+    if (view === 'settings') {
+      setShowSettings(true);
+      return;
+    }
     setActiveView(view);
     setActivePlaylistId(null);
   };
@@ -56,6 +62,7 @@ const Index = () => {
         onCreatePlaylist={() => setShowCreatePlaylist(true)}
         onDeletePlaylist={db.deletePlaylist}
         trackCount={db.tracks.length}
+        onOpenSettings={() => setShowSettings(true)}
         footerSlot={<DatabaseTools onBackup={db.backup} onRestore={db.restore} />}
       />
 
@@ -92,7 +99,13 @@ const Index = () => {
           />
         )}
 
-        {activeView === 'import' && <FileImporter onImport={db.addTrack} />}
+        {activeView === 'import' && (
+          <FileImporter
+            onImport={db.addTrack}
+            onCreatePlaylist={db.createPlaylist}
+            onAddToPlaylist={db.addToPlaylist}
+          />
+        )}
 
         {activeView === 'export' && (
           <ExportPreview
@@ -106,6 +119,15 @@ const Index = () => {
         open={showCreatePlaylist}
         onOpenChange={setShowCreatePlaylist}
         onCreate={(name) => db.createPlaylist(name)}
+      />
+
+      <SettingsPanel
+        open={showSettings}
+        onOpenChange={setShowSettings}
+        onClearAll={db.clearAll}
+        onRestoreBackup={db.restoreFromBackup}
+        tracks={db.tracks}
+        onRefresh={db.refresh}
       />
     </div>
   );

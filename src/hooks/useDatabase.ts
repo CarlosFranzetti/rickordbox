@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getDatabase,
   getAllTracks,
@@ -14,17 +14,23 @@ import {
   reorderPlaylistTracks,
   generateExportManifest,
   exportDatabaseFile,
+  exportDatabaseBase64,
   restoreDatabase,
+  restoreDatabaseFromBase64,
+  clearAllData,
+  getTrackCount,
+  getPlaylistCount,
   type Track,
   type Playlist,
-  
 } from '@/lib/database';
+import { loadSettings, saveBackupEntry, getBackupData } from '@/lib/settings';
 
 export function useDatabase() {
   const [ready, setReady] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
+  const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     getDatabase().then(() => {
@@ -32,6 +38,47 @@ export function useDatabase() {
       refresh();
     });
   }, []);
+
+  // Auto-save timer
+  useEffect(() => {
+    if (!ready) return;
+
+    const startAutoSave = () => {
+      if (autoSaveRef.current) clearInterval(autoSaveRef.current);
+      const settings = loadSettings();
+      const intervalMs = settings.autoSaveInterval * 60 * 1000;
+
+      autoSaveRef.current = setInterval(() => {
+        try {
+          const b64 = exportDatabaseBase64();
+          const entry = {
+            id: `auto-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            trackCount: getTrackCount(),
+            playlistCount: getPlaylistCount(),
+            data: b64,
+          };
+          const currentSettings = loadSettings();
+          saveBackupEntry(entry, currentSettings.maxBackups);
+        } catch {
+          // Auto-save failed silently
+        }
+      }, intervalMs);
+    };
+
+    startAutoSave();
+
+    // Listen for settings changes
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'pioneer-export-settings') startAutoSave();
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      if (autoSaveRef.current) clearInterval(autoSaveRef.current);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [ready]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -42,8 +89,9 @@ export function useDatabase() {
   }, []);
 
   const handleAddTrack = useCallback(async (track: Partial<Track>) => {
-    await addTrack(track);
+    const id = await addTrack(track);
     await refresh();
+    return id;
   }, [refresh]);
 
   const handleDeleteTrack = useCallback(async (id: number) => {
@@ -106,6 +154,18 @@ export function useDatabase() {
     await refresh();
   }, [refresh]);
 
+  const handleRestoreFromBackupId = useCallback(async (id: string) => {
+    const data = getBackupData(id);
+    if (!data) throw new Error('Backup not found');
+    await restoreDatabase(data);
+    await refresh();
+  }, [refresh]);
+
+  const handleClearAll = useCallback(async () => {
+    await clearAllData();
+    await refresh();
+  }, [refresh]);
+
   return {
     ready,
     loading,
@@ -124,5 +184,7 @@ export function useDatabase() {
     generateExport: handleGenerateExport,
     backup: handleBackup,
     restore: handleRestore,
+    restoreFromBackup: handleRestoreFromBackupId,
+    clearAll: handleClearAll,
   };
 }

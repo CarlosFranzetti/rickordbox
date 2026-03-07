@@ -235,6 +235,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       }
       // Save after all playlists created
       saveDatabase();
+      await onImportComplete?.();
     }
 
     setResults(newResults);

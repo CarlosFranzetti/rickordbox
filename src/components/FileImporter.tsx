@@ -335,7 +335,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
             ))}
           </div>
           <div className="flex gap-2 pt-1">
-            <Button size="sm" onClick={handleImportWithPlaylists}>
+            <Button size="sm" onClick={() => handleImportWithPlaylists()}>
               Import {pendingFiles?.filter(f => isAudioFile(f.name)).length} tracks
             </Button>
             <Button variant="outline" size="sm" onClick={() => {

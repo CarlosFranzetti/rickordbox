@@ -170,6 +170,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
   const handleImportWithPlaylists = useCallback(async (selectedOverride?: Set<string>) => {
     if (!pendingFiles) return;
     const basePaths = pendingBasePaths || undefined;
+    const activeSelectedFolders = selectedOverride ?? selectedFolders;
 
     setImporting(true);
     setShowFolderStep(false);

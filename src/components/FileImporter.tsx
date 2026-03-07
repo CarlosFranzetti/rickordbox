@@ -68,8 +68,7 @@ function pathToPlaylistName(path: string): string {
 }
 
 function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): FolderPlaylist[] {
-  const rootCounts = new Map<string, number>();
-  const subfolderCounts = new Map<string, number>();
+  const folderFileCounts = new Map<string, number>();
 
   for (const file of files) {
     if (!isAudioFile(file.name)) continue;
@@ -78,31 +77,19 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
     const parts = relativePath.split('/').filter(Boolean);
     if (parts.length < 2) continue;
 
-    const rootPath = parts[0];
-    rootCounts.set(rootPath, (rootCounts.get(rootPath) || 0) + 1);
-
-    const leafFolderPath = parts.slice(0, -1).join('/');
-    if (leafFolderPath !== rootPath) {
-      subfolderCounts.set(leafFolderPath, (subfolderCounts.get(leafFolderPath) || 0) + 1);
+    // Count files for every folder level from root down to the file's parent
+    for (let depth = 1; depth < parts.length; depth++) {
+      const folderPath = parts.slice(0, depth).join('/');
+      folderFileCounts.set(folderPath, (folderFileCounts.get(folderPath) || 0) + 1);
     }
   }
 
-  const roots: FolderPlaylist[] = Array.from(rootCounts.entries())
+  const allFolders: FolderPlaylist[] = Array.from(folderFileCounts.entries())
     .map(([path, fileCount]) => ({
       path,
       name: path,
       fileCount,
-      isRoot: true,
-      depth: 1,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const subfolders: FolderPlaylist[] = Array.from(subfolderCounts.entries())
-    .map(([path, fileCount]) => ({
-      path,
-      name: path,
-      fileCount,
-      isRoot: false,
+      isRoot: pathDepth(path) === 1,
       depth: pathDepth(path),
     }))
     .sort((a, b) => {
@@ -110,7 +97,7 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
       return a.name.localeCompare(b.name);
     });
 
-  return [...roots, ...subfolders];
+  return allFolders;
 }
 
 function createPreScanBackup(): ScanBackupSnapshot | null {
@@ -236,15 +223,12 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
             if (trackId && activeSelectedFolders.size > 0) {
               const parts = filePath.split('/').filter(Boolean);
               if (parts.length >= 2) {
-                const rootPath = parts[0];
-                const leafFolderPath = parts.slice(0, -1).join('/');
-
-                if (activeSelectedFolders.has(rootPath)) {
-                  pushTrackToBucket(folderTracks, rootPath, trackId);
-                }
-
-                if (leafFolderPath !== rootPath && activeSelectedFolders.has(leafFolderPath)) {
-                  pushTrackToBucket(folderTracks, leafFolderPath, trackId);
+                // Add track to every ancestor folder that's selected
+                for (let depth = 1; depth < parts.length; depth++) {
+                  const folderPath = parts.slice(0, depth).join('/');
+                  if (activeSelectedFolders.has(folderPath)) {
+                    pushTrackToBucket(folderTracks, folderPath, trackId);
+                  }
                 }
               }
             }

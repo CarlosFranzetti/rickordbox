@@ -222,7 +222,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       let plIdx = 0;
       for (const [folder, trackIds] of folderTracks) {
         plIdx++;
-        const folderName = folder.split('/').pop() || folder;
+        const folderName = folder.replace(/\//g, ' / ');
         setProgress({ current: plIdx, total: folderTracks.size, phase: `Playlist: ${folderName}` });
         try {
           const playlistId = await onCreatePlaylist(folderName);

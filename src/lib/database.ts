@@ -38,6 +38,7 @@ export async function getDatabase(): Promise<Database> {
     }
   } catch (e) {
     console.warn('Failed to restore DB from localStorage, creating fresh:', e);
+    localStorage.removeItem(DB_STORAGE_KEY);
     db = new SQL.Database();
   }
 

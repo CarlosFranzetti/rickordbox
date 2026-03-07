@@ -178,7 +178,7 @@ export function useDatabase() {
     playlists,
     refresh,
     addTrack: handleAddTrack,
-    deleteTrack: handleDeleteTrack,
+    addTrackFast: handleAddTrackFast,
     updateTrack: handleUpdateTrack,
     createPlaylist: handleCreatePlaylist,
     deletePlaylist: handleDeletePlaylist,

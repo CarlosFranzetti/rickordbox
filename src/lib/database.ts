@@ -94,7 +94,6 @@ export async function getDatabase(): Promise<Database> {
     );
   `);
 
-  saveDatabase();
   return db;
 }
 

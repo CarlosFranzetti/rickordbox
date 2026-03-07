@@ -130,6 +130,7 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
     e.target.value = '';
   };
 
+  const handleStartScrape = async () => {
     if (!settings.discogsToken) return;
     setScraping(true);
     setScrapeResult(null);

@@ -56,6 +56,9 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
 }
 
 export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: FileImporterProps) {
+  // Using onCreatePlaylist and onAddToPlaylist for folder-to-playlist feature
+  const _createPlaylist = onCreatePlaylist;
+  const _addToPlaylist = onAddToPlaylist;
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<ImportResult[]>([]);

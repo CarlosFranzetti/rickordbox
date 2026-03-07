@@ -16,7 +16,7 @@ import {
   exportDatabaseFile,
   exportDatabaseBase64,
   restoreDatabase,
-  restoreDatabaseFromBase64,
+  
   clearAllData,
   getTrackCount,
   getPlaylistCount,

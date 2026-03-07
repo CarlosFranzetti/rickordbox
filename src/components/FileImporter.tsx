@@ -6,7 +6,7 @@ import type { Track } from '@/lib/database';
 import * as mm from 'music-metadata-browser';
 
 interface FileImporterProps {
-  onImport: (track: Partial<Track>) => Promise<void>;
+  onImport: (track: Partial<Track>) => Promise<number | void>;
   onCreatePlaylist: (name: string) => Promise<number>;
   onAddToPlaylist: (playlistId: number, trackId: number) => Promise<void>;
 }

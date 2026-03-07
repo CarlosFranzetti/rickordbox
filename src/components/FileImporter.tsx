@@ -3,6 +3,7 @@ import { Upload, FileAudio, FolderOpen, Check, AlertCircle, ListMusic, Loader2 }
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Track } from '@/lib/database';
+import { saveDatabase } from '@/lib/database';
 import * as mm from 'music-metadata-browser';
 
 interface FileImporterProps {
@@ -31,7 +32,6 @@ function isAudioFile(name: string): boolean {
   return !!ext && AUDIO_EXTS.includes(ext);
 }
 
-// Extract folder structure from file paths to suggest playlists
 function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): FolderPlaylist[] {
   const folderMap = new Map<string, number>();
 
@@ -39,9 +39,8 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
     if (!isAudioFile(file.name)) continue;
     const path = basePaths?.get(file) || (file as any).webkitRelativePath || '';
     const parts = path.split('/');
-    if (parts.length < 2) continue; // no folder structure
+    if (parts.length < 2) continue;
 
-    // Use the parent folder as the playlist name
     const folder = parts.slice(0, -1).join('/');
     folderMap.set(folder, (folderMap.get(folder) || 0) + 1);
   }
@@ -55,10 +54,48 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
     .sort((a, b) => a.path.localeCompare(b.path));
 }
 
+async function parseMetadata(file: File): Promise<Partial<Track>> {
+  let title = file.name.replace(/\.[^/.]+$/, '');
+  let artist = 'Unknown';
+  let album = '';
+  let genre = '';
+  let bpm = 0;
+  let key = '';
+  let duration = 0;
+  let year = 0;
+  let bitrate = 0;
+  let sampleRate = 0;
+  let comment = '';
+
+  try {
+    const metadata = await mm.parseBlob(file);
+    const { common, format } = metadata;
+
+    if (common.title) title = common.title;
+    if (common.artist) artist = common.artist;
+    if (common.album) album = common.album;
+    if (common.genre?.length) genre = common.genre.join(', ');
+    if (common.bpm) bpm = common.bpm;
+    if (common.key) key = common.key;
+    if (common.year) year = common.year;
+    if (common.comment?.length) comment = common.comment.map((c: any) => typeof c === 'string' ? c : c.text || '').join('; ');
+    if (format.duration) duration = format.duration;
+    if (format.bitrate) bitrate = Math.round(format.bitrate / 1000);
+    if (format.sampleRate) sampleRate = format.sampleRate;
+  } catch (err) {
+    console.warn('Metadata parse failed for', file.name, err);
+    // Fallback to filename parsing
+    const dashSplit = title.split(' - ');
+    if (dashSplit.length >= 2) {
+      artist = dashSplit[0].trim();
+      title = dashSplit.slice(1).join(' - ').trim();
+    }
+  }
+
+  return { title, artist, album, genre, bpm, key, duration, bitrate, sample_rate: sampleRate, year, comment, file_name: file.name, file_size: file.size };
+}
+
 export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: FileImporterProps) {
-  // Using onCreatePlaylist and onAddToPlaylist for folder-to-playlist feature
-  const _createPlaylist = onCreatePlaylist;
-  const _addToPlaylist = onAddToPlaylist;
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<ImportResult[]>([]);
@@ -73,49 +110,8 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [showFolderStep, setShowFolderStep] = useState(false);
 
-  const parseMetadata = useCallback(async (file: File): Promise<Partial<Track>> => {
-    let title = file.name.replace(/\.[^/.]+$/, '');
-    let artist = 'Unknown';
-    let album = '';
-    let genre = '';
-    let bpm = 0;
-    let key = '';
-    let duration = 0;
-    let year = 0;
-    let bitrate = 0;
-    let sampleRate = 0;
-    let comment = '';
-
-    try {
-      const metadata = await mm.parseBlob(file);
-      const { common, format } = metadata;
-
-      if (common.title) title = common.title;
-      if (common.artist) artist = common.artist;
-      if (common.album) album = common.album;
-      if (common.genre?.length) genre = common.genre.join(', ');
-      if (common.bpm) bpm = common.bpm;
-      if (common.key) key = common.key;
-      if (common.year) year = common.year;
-      if (common.comment?.length) comment = common.comment.map((c: any) => typeof c === 'string' ? c : c.text || '').join('; ');
-      if (format.duration) duration = format.duration;
-      if (format.bitrate) bitrate = Math.round(format.bitrate / 1000);
-      if (format.sampleRate) sampleRate = format.sampleRate;
-    } catch (err) {
-      console.warn('Metadata parse failed for', file.name, err);
-      // Fallback to filename parsing
-      const dashSplit = title.split(' - ');
-      if (dashSplit.length >= 2) {
-        artist = dashSplit[0].trim();
-        title = dashSplit.slice(1).join(' - ').trim();
-      }
-    }
-
-    return { title, artist, album, genre, bpm, key, duration, bitrate, sample_rate: sampleRate, year, comment, file_name: file.name, file_size: file.size };
-  }, []);
-
   const processFiles = useCallback(
-    async (files: File[], basePaths?: Map<File, string>, playlistMap?: Map<string, number>) => {
+    async (files: File[], basePaths?: Map<File, string>) => {
       setImporting(true);
       setShowFolderStep(false);
       const audioFiles = files.filter(f => isAudioFile(f.name));
@@ -125,41 +121,32 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
       let idx = 0;
       for (const file of audioFiles) {
         idx++;
-        setProgress({ current: idx, total: audioFiles.length, phase: `${file.name}` });
+        setProgress({ current: idx, total: audioFiles.length, phase: file.name });
 
         try {
           const trackData = await parseMetadata(file);
           const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
           trackData.file_path = filePath;
 
-          console.log('Importing track:', file.name, '→', { title: trackData.title, artist: trackData.artist, album: trackData.album, bpm: trackData.bpm, key: trackData.key, genre: trackData.genre, duration: trackData.duration });
-
-          // Import to DB — onImport returns void but the track gets added
           await onImport(trackData);
-
           newResults.push({ fileName: file.name, status: 'success' });
         } catch (err) {
           console.error('Import failed for', file.name, err);
           newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
         }
 
-        // Yield to UI every 10 files
         if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
       }
 
-      // Create playlists from folders if selected
-      if (playlistMap && playlistMap.size > 0) {
-        setProgress({ current: 0, total: playlistMap.size, phase: 'Creating playlists…' });
-        // We need the track IDs. Since we just imported them, we'll need to look them up.
-        // For now, playlist creation from folders works by matching file paths.
-      }
+      // Save database once after all imports
+      saveDatabase();
 
       setResults(newResults);
       setImporting(false);
       setPendingFiles(null);
       setPendingBasePaths(null);
     },
-    [onImport, parseMetadata]
+    [onImport]
   );
 
   const handleFilesReceived = useCallback(
@@ -167,14 +154,12 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
       const folders = analyzeFolderStructure(files, basePaths);
 
       if (folders.length > 0) {
-        // Show folder-as-playlist step
         setPendingFiles(files);
         setPendingBasePaths(basePaths || null);
         setFolderPlaylists(folders);
         setSelectedFolders(new Set(folders.map(f => f.path)));
         setShowFolderStep(true);
       } else {
-        // No folders, just import directly
         processFiles(files, basePaths);
       }
     },
@@ -218,12 +203,16 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
             }
           }
         }
-      } catch {
+      } catch (err) {
+        console.error('Import failed for', file.name, err);
         newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
       }
 
       if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
     }
+
+    // Save database after all track imports
+    saveDatabase();
 
     // Create playlists from selected folders and add tracks
     if (selectedFolders.size > 0 && folderTracks.size > 0) {
@@ -234,21 +223,23 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
         const folderName = folder.split('/').pop() || folder;
         setProgress({ current: plIdx, total: folderTracks.size, phase: `Playlist: ${folderName}` });
         try {
-          const playlistId = await _createPlaylist(folderName);
+          const playlistId = await onCreatePlaylist(folderName);
           for (const tid of trackIds) {
-            await _addToPlaylist(playlistId, tid);
+            await onAddToPlaylist(playlistId, tid);
           }
-        } catch {
-          // Playlist creation failed silently
+        } catch (err) {
+          console.error('Playlist creation failed for', folder, err);
         }
       }
+      // Save after all playlists created
+      saveDatabase();
     }
 
     setResults(newResults);
     setImporting(false);
     setPendingFiles(null);
     setPendingBasePaths(null);
-  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, parseMetadata, _createPlaylist, _addToPlaylist]);
+  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, onCreatePlaylist, onAddToPlaylist]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
@@ -315,7 +306,7 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
       <div>
         <h2 className="text-lg font-semibold text-foreground">Import Audio Files</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Scan files or folders to add to your collection. Metadata is read from ID3 tags in the background. Folders become playlists automatically.
+          Scan files or folders to add to your collection. Metadata is read from ID3 tags. Folders become playlists automatically.
         </p>
       </div>
 
@@ -435,7 +426,7 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
           <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
             <div
               className="h-full bg-primary transition-all duration-200"
-              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+              style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
             />
           </div>
         </div>
@@ -451,7 +442,7 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
             {audioResults.map((r, i) => (
               <div key={i} className="flex items-center gap-2 px-4 py-1.5 text-sm">
                 {r.status === 'success' ? (
-                  <Check className="w-3.5 h-3.5 shrink-0" style={{ color: 'hsl(var(--key-color))' }} />
+                  <Check className="w-3.5 h-3.5 shrink-0 text-primary" />
                 ) : (
                   <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
                 )}

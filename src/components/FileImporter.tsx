@@ -18,6 +18,7 @@ interface FileImporterProps {
   onImportComplete?: () => Promise<void> | void;
   onCreatePlaylist: (name: string) => Promise<number>;
   onAddToPlaylist: (playlistId: number, trackId: number) => Promise<void>;
+  onRegisterFiles?: (files: File[]) => void;
 }
 
 interface ImportResult {

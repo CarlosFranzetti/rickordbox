@@ -49,7 +49,7 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
   return Array.from(folderMap.entries())
     .map(([path, count]) => ({
       path,
-      name: path.split('/').pop() || path,
+      name: path,
       fileCount: count,
     }))
     .sort((a, b) => a.path.localeCompare(b.path));

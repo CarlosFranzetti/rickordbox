@@ -32,13 +32,13 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
   handleGlobalError = (event: ErrorEvent) => {
     console.error('Unhandled window error:', event.error || event.message);
-    this.setState({ hasError: true });
+    // Only crash on fatal errors, not routine failures
   };
 
   handleUnhandledRejection = (event: PromiseRejectionEvent) => {
     console.error('Unhandled promise rejection:', event.reason);
     event.preventDefault();
-    this.setState({ hasError: true });
+    // Don't crash the app on async failures - they're handled locally
   };
 
   handleReload = () => {

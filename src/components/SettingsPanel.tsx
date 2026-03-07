@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Settings, Trash2, Key, Clock, Archive, X, Search, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Settings, Trash2, Key, Clock, Archive, X, Search, Loader2, RefreshCw } from 'lucide-react';
+import * as mm from 'music-metadata-browser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {

@@ -62,7 +62,74 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
     onOpenChange(false);
   };
 
-  const handleStartScrape = async () => {
+  const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'ogg', 'wma'];
+  const isAudioFile = (name: string) => {
+    const ext = name.split('.').pop()?.toLowerCase();
+    return !!ext && AUDIO_EXTS.includes(ext);
+  };
+
+  const handleRescanFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0 || !onUpdateTrack) return;
+    const files = Array.from(e.target.files).filter(f => isAudioFile(f.name));
+    setRescanning(true);
+    setRescanResult(null);
+
+    // Build a lookup from relative path to file
+    const pathToFile = new Map<string, File>();
+    for (const file of files) {
+      const relPath = ((file as any).webkitRelativePath || file.name).replace(/\\/g, '/').replace(/^\/+/, '');
+      pathToFile.set(relPath, file);
+    }
+
+    let updated = 0, skipped = 0, failed = 0;
+    const total = tracks.length;
+
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      setRescanProgress({ current: i + 1, total, fileName: track.file_name });
+
+      const file = pathToFile.get(track.file_path);
+      if (!file) { skipped++; continue; }
+
+      try {
+        const metadata = await mm.parseBlob(file);
+        const { common, format } = metadata;
+        const updates: Partial<Track> = {};
+
+        if (common.title && common.title !== track.title) updates.title = common.title;
+        if (common.artist && common.artist !== track.artist) updates.artist = common.artist;
+        if (common.album && common.album !== track.album) updates.album = common.album;
+        if (common.genre?.length) { const g = common.genre.join(', '); if (g !== track.genre) updates.genre = g; }
+        if (common.bpm && common.bpm !== track.bpm) updates.bpm = common.bpm;
+        if (common.key && common.key !== track.key) updates.key = common.key;
+        if (common.year && common.year !== track.year) updates.year = common.year;
+        if (common.comment?.length) {
+          const c = common.comment.map((x: any) => typeof x === 'string' ? x : x.text || '').join('; ');
+          if (c !== track.comment) updates.comment = c;
+        }
+        if (format.duration && format.duration !== track.duration) updates.duration = format.duration;
+        if (format.bitrate) { const br = Math.round(format.bitrate / 1000); if (br !== track.bitrate) updates.bitrate = br; }
+        if (format.sampleRate && format.sampleRate !== track.sample_rate) updates.sample_rate = format.sampleRate;
+
+        if (Object.keys(updates).length > 0) {
+          await onUpdateTrack(track.id, updates);
+          updated++;
+        } else {
+          skipped++;
+        }
+      } catch {
+        failed++;
+      }
+
+      if (i % 10 === 0) await new Promise(r => setTimeout(r, 0));
+    }
+
+    setRescanResult({ updated, skipped, failed });
+    setRescanning(false);
+    onRefresh();
+    e.target.value = '';
+  };
+
     if (!settings.discogsToken) return;
     setScraping(true);
     setScrapeResult(null);

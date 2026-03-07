@@ -225,6 +225,48 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
                   />
                 </div>
 
+                <div className="border-t border-border pt-4 space-y-3">
+                  <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-muted-foreground" />
+                    Re-scan Metadata
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Re-select your music folder to re-read tags from files and update all matching tracks in the database.
+                  </p>
+                  <input
+                    ref={rescanInputRef}
+                    type="file"
+                    className="hidden"
+                    {...({ webkitdirectory: '', directory: '', multiple: true } as any)}
+                    onChange={handleRescanFolder}
+                  />
+                  {!rescanning && (
+                    <Button size="sm" onClick={() => rescanInputRef.current?.click()} disabled={tracks.length === 0}>
+                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                      Re-scan folder ({tracks.length} tracks)
+                    </Button>
+                  )}
+                  {rescanning && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        <span className="text-sm text-foreground">{rescanProgress.current}/{rescanProgress.total}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{rescanProgress.fileName}</p>
+                      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                        <div className="h-full bg-primary transition-all duration-200" style={{ width: `${(rescanProgress.current / rescanProgress.total) * 100}%` }} />
+                      </div>
+                    </div>
+                  )}
+                  {rescanResult && (
+                    <p className="text-xs text-muted-foreground">
+                      Done: <span className="text-primary">{rescanResult.updated} updated</span>,{' '}
+                      {rescanResult.skipped} unchanged,{' '}
+                      <span className="text-destructive">{rescanResult.failed} failed</span>
+                    </p>
+                  )}
+                </div>
+
                 <div className="border-t border-border pt-4">
                   <Button variant="destructive" size="sm" onClick={() => setShowClearConfirm(true)}>
                     <Trash2 className="w-3.5 h-3.5 mr-1.5" />

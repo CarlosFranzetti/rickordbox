@@ -64,7 +64,7 @@ export function FileImporter({ onImport }: FileImporterProps) {
             if (common.bpm) bpm = common.bpm;
             if (common.key) key = common.key;
             if (common.year) year = common.year;
-            if (common.comment?.length) comment = common.comment.map(c => typeof c === 'string' ? c : c.text).join('; ');
+            if (common.comment?.length) comment = common.comment.map((c: any) => typeof c === 'string' ? c : c.text || '').join('; ');
             if (format.duration) duration = format.duration;
             if (format.bitrate) bitrate = Math.round(format.bitrate / 1000); // kbps
             if (format.sampleRate) sampleRate = format.sampleRate;

@@ -17,7 +17,7 @@ import {
   restoreDatabase,
   type Track,
   type Playlist,
-  type ExportManifest,
+  
 } from '@/lib/database';
 
 export function useDatabase() {

@@ -223,15 +223,12 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
             if (trackId && activeSelectedFolders.size > 0) {
               const parts = filePath.split('/').filter(Boolean);
               if (parts.length >= 2) {
-                const rootPath = parts[0];
-                const leafFolderPath = parts.slice(0, -1).join('/');
-
-                if (activeSelectedFolders.has(rootPath)) {
-                  pushTrackToBucket(folderTracks, rootPath, trackId);
-                }
-
-                if (leafFolderPath !== rootPath && activeSelectedFolders.has(leafFolderPath)) {
-                  pushTrackToBucket(folderTracks, leafFolderPath, trackId);
+                // Add track to every ancestor folder that's selected
+                for (let depth = 1; depth < parts.length; depth++) {
+                  const folderPath = parts.slice(0, depth).join('/');
+                  if (activeSelectedFolders.has(folderPath)) {
+                    pushTrackToBucket(folderTracks, folderPath, trackId);
+                  }
                 }
               }
             }

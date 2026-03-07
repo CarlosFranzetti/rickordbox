@@ -1,6 +1,7 @@
-import { ReactNode, useState } from 'react';
-import { Music, ListMusic, Upload, HardDrive, Plus, Trash2, Disc3, Settings, ChevronRight, ChevronDown, Folder, FolderOpen } from 'lucide-react';
-import type { Playlist } from '@/lib/database';
+import { ReactNode, useState, useEffect } from 'react';
+import { Music, ListMusic, Upload, HardDrive, Plus, Trash2, Disc3, Settings, ChevronRight, ChevronDown, Folder, FolderOpen, FileAudio } from 'lucide-react';
+import type { Playlist, Track } from '@/lib/database';
+import { formatDuration } from '@/lib/database';
 
 type View = 'collection' | 'import' | 'export' | 'settings';
 
@@ -15,6 +16,7 @@ interface AppSidebarProps {
   onOpenSettings: () => void;
   trackCount: number;
   footerSlot?: ReactNode;
+  getPlaylistTracks?: (playlistId: number) => Promise<Track[]>;
 }
 
 interface PlaylistTreeNode {
@@ -52,7 +54,6 @@ function buildPlaylistTree(playlists: Playlist[]): PlaylistTreeNode[] {
   return root;
 }
 
-/** Check if any descendant playlist is the active one */
 function hasActiveDescendant(node: PlaylistTreeNode, activeId: number | null): boolean {
   if (!activeId) return false;
   if (node.playlist?.id === activeId) return true;
@@ -65,27 +66,49 @@ function PlaylistNode({
   activePlaylistId,
   onPlaylistSelect,
   onDeletePlaylist,
+  getPlaylistTracks,
 }: {
   node: PlaylistTreeNode;
   depth: number;
   activePlaylistId: number | null;
   onPlaylistSelect: (id: number) => void;
   onDeletePlaylist: (id: number) => void;
+  getPlaylistTracks?: (playlistId: number) => Promise<Track[]>;
 }) {
   const hasChildren = node.children.length > 0;
   const isActive = node.playlist && activePlaylistId === node.playlist.id;
-  // Auto-expand if a descendant is active
   const [expanded, setExpanded] = useState(() => hasActiveDescendant(node, activePlaylistId));
   const isFolder = hasChildren && !node.playlist;
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [tracksLoaded, setTracksLoaded] = useState(false);
+
+  // Load tracks when a playlist node is expanded
+  useEffect(() => {
+    if (expanded && node.playlist && getPlaylistTracks && !tracksLoaded) {
+      getPlaylistTracks(node.playlist.id).then((t) => {
+        setTracks(t);
+        setTracksLoaded(true);
+      });
+    }
+  }, [expanded, node.playlist, getPlaylistTracks, tracksLoaded]);
+
+  // Refresh tracks when this playlist is active (after changes)
+  useEffect(() => {
+    if (isActive && node.playlist && getPlaylistTracks) {
+      getPlaylistTracks(node.playlist.id).then(setTracks);
+    }
+  }, [isActive, node.playlist, getPlaylistTracks]);
 
   const handleClick = () => {
     if (node.playlist) {
       onPlaylistSelect(node.playlist.id);
     }
-    if (hasChildren) {
+    if (hasChildren || node.playlist) {
       setExpanded(!expanded);
     }
   };
+
+  const showInlineTracks = expanded && node.playlist && tracks.length > 0;
 
   return (
     <div>
@@ -100,9 +123,9 @@ function PlaylistNode({
         onClick={handleClick}
       >
         {/* Expand/collapse chevron */}
-        {hasChildren ? (
+        {(hasChildren || node.playlist) ? (
           <button
-            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); if (!tracksLoaded) setTracksLoaded(false); }}
             className="w-4 h-4 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground"
           >
             {expanded
@@ -114,7 +137,7 @@ function PlaylistNode({
           <span className="w-4 shrink-0" />
         )}
 
-        {/* Icon: folder vs playlist */}
+        {/* Icon */}
         {isFolder ? (
           expanded
             ? <FolderOpen className="w-4 h-4 shrink-0 text-accent" />
@@ -149,7 +172,47 @@ function PlaylistNode({
         )}
       </div>
 
-      {/* Children */}
+      {/* Inline track list under playlist */}
+      {showInlineTracks && (
+        <div className="border-l border-border/40" style={{ marginLeft: `${16 + depth * 16}px` }}>
+          {tracks.map((track) => (
+            <div
+              key={track.id}
+              className="flex items-center gap-1.5 py-0.5 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/30 transition-colors rounded-sm"
+            >
+              <FileAudio className="w-3 h-3 shrink-0 text-muted-foreground/60" />
+              <span className="truncate text-foreground/90 font-medium min-w-0" style={{ maxWidth: '35%' }}>
+                {track.title || '—'}
+              </span>
+              <span className="text-muted-foreground mx-0.5">·</span>
+              <span className="truncate text-muted-foreground min-w-0" style={{ maxWidth: '30%' }}>
+                {track.artist || '—'}
+              </span>
+              {track.bpm > 0 && (
+                <>
+                  <span className="text-muted-foreground/40 mx-0.5">·</span>
+                  <span className="text-[10px] font-mono text-muted-foreground/70 shrink-0">
+                    {track.bpm.toFixed(0)}
+                  </span>
+                </>
+              )}
+              {track.key && (
+                <>
+                  <span className="text-muted-foreground/40 mx-0.5">·</span>
+                  <span className="text-[10px] font-mono text-primary/60 shrink-0">
+                    {track.key}
+                  </span>
+                </>
+              )}
+              <span className="ml-auto text-[10px] font-mono text-muted-foreground/50 shrink-0">
+                {formatDuration(track.duration)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Children folders/playlists */}
       {hasChildren && expanded && (
         <div>
           {node.children.map((child) => (
@@ -160,6 +223,7 @@ function PlaylistNode({
               activePlaylistId={activePlaylistId}
               onPlaylistSelect={onPlaylistSelect}
               onDeletePlaylist={onDeletePlaylist}
+              getPlaylistTracks={getPlaylistTracks}
             />
           ))}
         </div>
@@ -179,6 +243,7 @@ export function AppSidebar({
   onOpenSettings,
   trackCount,
   footerSlot,
+  getPlaylistTracks,
 }: AppSidebarProps) {
   const tree = buildPlaylistTree(playlists);
 
@@ -249,6 +314,7 @@ export function AppSidebar({
               activePlaylistId={activePlaylistId}
               onPlaylistSelect={onPlaylistSelect}
               onDeletePlaylist={onDeletePlaylist}
+              getPlaylistTracks={getPlaylistTracks}
             />
           ))}
         </div>

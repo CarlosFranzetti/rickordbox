@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useDatabase } from '@/hooks/useDatabase';
+import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { AppSidebar } from '@/components/AppSidebar';
 import { TrackTable } from '@/components/TrackTable';
+import { TrackDetailPanel } from '@/components/TrackDetailPanel';
+import { AudioTransport } from '@/components/AudioTransport';
 import { FileImporter } from '@/components/FileImporter';
 import { ExportPreview } from '@/components/ExportPreview';
 import { CreatePlaylistDialog } from '@/components/CreatePlaylistDialog';
 import { DatabaseTools } from '@/components/DatabaseTools';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { DuplicateManager } from '@/components/DuplicateManager';
 import type { Track } from '@/lib/database';
 import { Loader2 } from 'lucide-react';
 
@@ -14,11 +18,13 @@ type View = 'collection' | 'import' | 'export' | 'settings';
 
 const Index = () => {
   const db = useDatabase();
+  const player = useAudioPlayer();
   const [activeView, setActiveView] = useState<View>('collection');
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [playlistTracks, setPlaylistTracks] = useState<Track[]>([]);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
 
   useEffect(() => {
     if (activePlaylistId) {
@@ -51,6 +57,20 @@ const Index = () => {
     );
   }
 
+  const sharedTrackTableProps = {
+    playlists: db.playlists,
+    onDeleteTrack: db.deleteTrack,
+    onUpdateTrack: db.updateTrack,
+    onAddToPlaylist: db.addToPlaylist,
+    showSearch: true,
+    onSelectTrack: setSelectedTrack,
+    selectedTrackId: selectedTrack?.id ?? null,
+    onPlayTrack: (track: Track, trackList: Track[]) => player.playTrack(track, trackList),
+    currentPlayingId: player.currentTrack?.id ?? null,
+    isPlaying: player.isPlaying,
+    hasFileHandle: player.hasFileHandle,
+  };
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <AppSidebar
@@ -63,7 +83,17 @@ const Index = () => {
         onDeletePlaylist={db.deletePlaylist}
         trackCount={db.tracks.length}
         onOpenSettings={() => setShowSettings(true)}
-        footerSlot={<DatabaseTools onBackup={db.backup} onRestore={db.restore} />}
+        footerSlot={
+          <div className="space-y-2">
+            <DuplicateManager
+              tracks={db.tracks}
+              onDeleteTrack={db.deleteTrack}
+              onPlayTrack={(track) => player.playTrack(track)}
+              hasFileHandle={player.hasFileHandle}
+            />
+            <DatabaseTools onBackup={db.backup} onRestore={db.restore} />
+          </div>
+        }
         getPlaylistTracks={db.getPlaylistTracks}
       />
 
@@ -71,28 +101,21 @@ const Index = () => {
         {activeView === 'collection' && !activePlaylistId && (
           <TrackTable
             tracks={db.tracks}
-            playlists={db.playlists}
             title="Collection"
-            onDeleteTrack={db.deleteTrack}
-            onUpdateTrack={db.updateTrack}
-            onAddToPlaylist={db.addToPlaylist}
-            showSearch
+            {...sharedTrackTableProps}
           />
         )}
 
         {activeView === 'collection' && activePlaylistId && (
           <TrackTable
             tracks={playlistTracks}
-            playlists={db.playlists}
             title={(() => {
               const pl = db.playlists.find((p) => p.id === activePlaylistId);
               if (!pl) return 'Playlist';
               const parts = pl.name.split(' / ');
               return parts[parts.length - 1];
             })()}
-            onDeleteTrack={db.deleteTrack}
-            onUpdateTrack={db.updateTrack}
-            onAddToPlaylist={db.addToPlaylist}
+            {...sharedTrackTableProps}
             onRemoveFromPlaylist={(trackId) =>
               db.removeFromPlaylist(activePlaylistId, trackId)
             }
@@ -100,7 +123,6 @@ const Index = () => {
               db.reorderPlaylistTracks(activePlaylistId, trackIds)
             }
             showRemoveFromPlaylist
-            showSearch
             allowReorder
           />
         )}
@@ -108,9 +130,12 @@ const Index = () => {
         {activeView === 'import' && (
           <FileImporter
             onImport={db.addTrackFast}
-            onImportComplete={db.refresh}
+            onImportComplete={async () => {
+              await db.refresh();
+            }}
             onCreatePlaylist={db.createPlaylistFast}
             onAddToPlaylist={db.addToPlaylistFast}
+            onRegisterFiles={player.registerFiles}
           />
         )}
 
@@ -120,6 +145,27 @@ const Index = () => {
             onGenerateExport={db.generateExport}
           />
         )}
+
+        {/* Detail Panel */}
+        {selectedTrack && (activeView === 'collection') && (
+          <TrackDetailPanel track={selectedTrack} onClose={() => setSelectedTrack(null)} />
+        )}
+
+        {/* Audio Transport */}
+        <AudioTransport
+          currentTrack={player.currentTrack}
+          isPlaying={player.isPlaying}
+          currentTime={player.currentTime}
+          duration={player.duration}
+          volume={player.volume}
+          shuffle={player.shuffle}
+          onTogglePlay={player.togglePlay}
+          onSkipNext={player.skipNext}
+          onSkipPrev={player.skipPrev}
+          onSeek={player.seek}
+          onVolumeChange={player.setVolume}
+          onToggleShuffle={player.toggleShuffle}
+        />
       </main>
 
       <CreatePlaylistDialog

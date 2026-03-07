@@ -97,6 +97,10 @@ function getUniqueKeys(tracks: Track[]): string[] {
   return Array.from(keys).sort();
 }
 
+// Grid template for all columns: [Art] Title Artist Album Genre Label Year BPM Key Time Bitrate SR Actions
+const GRID_COLS = 'grid-cols-[32px_minmax(80px,2fr)_minmax(60px,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_50px_50px_40px_45px_60px_55px_32px]';
+const GRID_COLS_REORDER = 'grid-cols-[24px_32px_minmax(80px,2fr)_minmax(60px,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_50px_50px_40px_45px_60px_55px_32px]';
+
 export function TrackTable({
   tracks,
   playlists,
@@ -142,6 +146,7 @@ export function TrackTable({
   const hasActiveFilters = searchQuery || filterKey || bpmMin || bpmMax;
   const canReorder = allowReorder && onReorderTracks && !hasActiveFilters;
   const selectedTrack = tracks.find((track) => track.id === selectedId) || null;
+  const gridCols = canReorder ? GRID_COLS_REORDER : GRID_COLS;
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -238,19 +243,25 @@ export function TrackTable({
       )}
 
       {/* Table Header */}
-      <div className={`grid gap-2 px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground border-b border-border ${canReorder ? 'grid-cols-[24px_minmax(80px,2fr)_minmax(60px,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)_70px_50px_32px]' : 'grid-cols-[minmax(80px,2fr)_minmax(60px,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)_70px_50px_32px]'}`}>
+      <div className={`grid gap-1 px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground border-b border-border overflow-x-auto ${gridCols}`}>
         {canReorder && <span></span>}
+        <span></span>{/* Art */}
         <span>Title</span>
         <span>Artist</span>
         <span className="hidden md:block">Album</span>
         <span className="hidden lg:block">Genre</span>
-        <span>BPM / Key</span>
+        <span className="hidden xl:block">Label</span>
+        <span className="hidden lg:block">Year</span>
+        <span>BPM</span>
+        <span>Key</span>
         <span>Time</span>
+        <span className="hidden xl:block">Kbps</span>
+        <span className="hidden xl:block">SR</span>
         <span></span>
       </div>
 
       {/* Track Rows */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-auto">
         {filtered.length === 0 && (
           <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
             {hasActiveFilters ? 'No tracks match filters' : 'No tracks found'}
@@ -269,15 +280,24 @@ export function TrackTable({
               }
             }}
             onDragEnd={handleDragEnd}
-            className={`track-row grid gap-2 px-4 py-2 text-sm items-center ${
-              canReorder ? 'grid-cols-[24px_minmax(80px,2fr)_minmax(60px,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)_70px_50px_32px]' : 'grid-cols-[minmax(80px,2fr)_minmax(60px,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)_70px_50px_32px]'
-            } ${selectedId === track.id ? 'track-row-selected' : ''} ${
-              dragIdx !== null && overIdx === idx && dragIdx !== idx ? 'border-t-2 !border-t-primary' : ''
-            }`}
+            className={`track-row grid gap-1 px-4 py-1.5 text-sm items-center ${gridCols} ${
+              selectedId === track.id ? 'track-row-selected' : ''
+            } ${dragIdx !== null && overIdx === idx && dragIdx !== idx ? 'border-t-2 !border-t-primary' : ''}`}
           >
             {canReorder && (
               <GripVertical className="w-3.5 h-3.5 text-muted-foreground cursor-grab" />
             )}
+
+            {/* Cover Art */}
+            <div className="w-7 h-7 rounded overflow-hidden bg-secondary/60 flex items-center justify-center shrink-0">
+              {track.cover_art_url ? (
+                <img src={track.cover_art_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[8px] text-muted-foreground/40">♪</span>
+              )}
+            </div>
+
+            {/* Title */}
             <div className="truncate min-w-0">
               {onUpdateTrack ? (
                 <EditableCell
@@ -289,6 +309,8 @@ export function TrackTable({
                 <span className="text-foreground truncate">{track.title || '—'}</span>
               )}
             </div>
+
+            {/* Artist */}
             <div className="truncate min-w-0">
               {onUpdateTrack ? (
                 <EditableCell
@@ -300,32 +322,41 @@ export function TrackTable({
                 <span className="truncate text-secondary-foreground">{track.artist || '—'}</span>
               )}
             </div>
+
+            {/* Album */}
             <span className="truncate text-muted-foreground text-xs hidden md:block">{track.album || '—'}</span>
+
+            {/* Genre */}
             <span className="truncate text-muted-foreground text-xs hidden lg:block">{track.genre || '—'}</span>
-            <div className="flex gap-1">
-              {onUpdateTrack ? (
-                <>
-                  <EditableCell
-                    value={track.bpm > 0 ? track.bpm.toFixed(0) : ''}
-                    onSave={(v) => onUpdateTrack(track.id, { bpm: parseFloat(v) || 0 })}
-                    className="badge-bpm text-xs font-mono w-8 text-center"
-                  />
-                  <EditableCell
-                    value={track.key || ''}
-                    onSave={(v) => onUpdateTrack(track.id, { key: v })}
-                    className="badge-key text-xs font-mono w-8 text-center"
-                  />
-                </>
-              ) : (
-                <>
-                  {track.bpm > 0 && <span className="badge-bpm">{track.bpm.toFixed(0)}</span>}
-                  {track.key && <span className="badge-key">{track.key}</span>}
-                </>
-              )}
-            </div>
+
+            {/* Label */}
+            <span className="truncate text-muted-foreground text-xs hidden xl:block">{track.comment || '—'}</span>
+
+            {/* Year */}
+            <span className="text-muted-foreground text-xs hidden lg:block font-mono">{track.year || '—'}</span>
+
+            {/* BPM */}
+            <span className="badge-bpm text-xs font-mono text-center">{track.bpm > 0 ? track.bpm.toFixed(0) : '—'}</span>
+
+            {/* Key */}
+            <span className="badge-key text-xs font-mono text-center">{track.key || '—'}</span>
+
+            {/* Duration */}
             <span className="text-xs font-mono text-muted-foreground">
               {formatDuration(track.duration)}
             </span>
+
+            {/* Bitrate */}
+            <span className="text-[10px] font-mono text-muted-foreground hidden xl:block">
+              {track.bitrate ? `${track.bitrate}` : '—'}
+            </span>
+
+            {/* Sample Rate */}
+            <span className="text-[10px] font-mono text-muted-foreground hidden xl:block">
+              {track.sample_rate ? `${(track.sample_rate / 1000).toFixed(1)}k` : '—'}
+            </span>
+
+            {/* Actions */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -376,41 +407,54 @@ export function TrackTable({
           <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
             Selected Track Metadata
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
-            <div>
-              <p className="text-muted-foreground">Artist</p>
-              <p className="text-foreground truncate" title={selectedTrack.artist}>{selectedTrack.artist || '—'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Album</p>
-              <p className="text-foreground truncate" title={selectedTrack.album}>{selectedTrack.album || '—'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Genre</p>
-              <p className="text-foreground truncate" title={selectedTrack.genre}>{selectedTrack.genre || '—'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Year</p>
-              <p className="text-foreground">{selectedTrack.year || '—'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">BPM / Key</p>
-              <p className="text-foreground">
-                {selectedTrack.bpm ? selectedTrack.bpm.toFixed(0) : '—'}
-                {selectedTrack.key ? ` / ${selectedTrack.key}` : ''}
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Duration</p>
-              <p className="text-foreground">{formatDuration(selectedTrack.duration)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Bitrate</p>
-              <p className="text-foreground">{selectedTrack.bitrate ? `${selectedTrack.bitrate} kbps` : '—'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Sample Rate</p>
-              <p className="text-foreground">{selectedTrack.sample_rate ? `${selectedTrack.sample_rate} Hz` : '—'}</p>
+          <div className="flex items-start gap-4">
+            {selectedTrack.cover_art_url && (
+              <img src={selectedTrack.cover_art_url} alt="" className="w-16 h-16 rounded object-cover shrink-0" />
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs flex-1">
+              <div>
+                <p className="text-muted-foreground">Artist</p>
+                <p className="text-foreground truncate" title={selectedTrack.artist}>{selectedTrack.artist || '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Album</p>
+                <p className="text-foreground truncate" title={selectedTrack.album}>{selectedTrack.album || '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Genre</p>
+                <p className="text-foreground truncate" title={selectedTrack.genre}>{selectedTrack.genre || '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Year</p>
+                <p className="text-foreground">{selectedTrack.year || '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">BPM / Key</p>
+                <p className="text-foreground">
+                  {selectedTrack.bpm ? selectedTrack.bpm.toFixed(0) : '—'}
+                  {selectedTrack.key ? ` / ${selectedTrack.key}` : ''}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Duration</p>
+                <p className="text-foreground">{formatDuration(selectedTrack.duration)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Bitrate</p>
+                <p className="text-foreground">{selectedTrack.bitrate ? `${selectedTrack.bitrate} kbps` : '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Sample Rate</p>
+                <p className="text-foreground">{selectedTrack.sample_rate ? `${selectedTrack.sample_rate} Hz` : '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Comment</p>
+                <p className="text-foreground truncate" title={selectedTrack.comment}>{selectedTrack.comment || '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">File</p>
+                <p className="text-foreground truncate font-mono" title={selectedTrack.file_path}>{selectedTrack.file_name || '—'}</p>
+              </div>
             </div>
           </div>
         </div>

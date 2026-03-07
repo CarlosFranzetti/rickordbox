@@ -3,7 +3,14 @@ import { Upload, FileAudio, FolderOpen, Check, AlertCircle, ListMusic, Loader2 }
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Track } from '@/lib/database';
-import { saveDatabase } from '@/lib/database';
+import {
+  saveDatabase,
+  exportDatabaseBase64,
+  restoreDatabaseFromBase64,
+  getTrackCount,
+  getPlaylistCount,
+} from '@/lib/database';
+import { loadSettings, saveBackupEntry } from '@/lib/settings';
 import * as mm from 'music-metadata-browser';
 
 interface FileImporterProps {
@@ -24,6 +31,16 @@ interface FolderPlaylist {
   path: string;
   name: string;
   fileCount: number;
+  isRoot: boolean;
+  depth: number;
+}
+
+interface ScanBackupSnapshot {
+  id: string;
+  timestamp: string;
+  data: string;
+  trackCount: number;
+  playlistCount: number;
 }
 
 const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'ogg', 'wma'];
@@ -33,26 +50,94 @@ function isAudioFile(name: string): boolean {
   return !!ext && AUDIO_EXTS.includes(ext);
 }
 
+function normalizeRelativePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
+function getRelativePath(file: File, basePaths?: Map<File, string>): string {
+  const path = basePaths?.get(file) || (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+  return normalizeRelativePath(path);
+}
+
+function pathDepth(path: string): number {
+  return path.split('/').filter(Boolean).length;
+}
+
+function pathToPlaylistName(path: string): string {
+  return path.replace(/\//g, ' / ');
+}
+
 function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): FolderPlaylist[] {
-  const folderMap = new Map<string, number>();
+  const rootCounts = new Map<string, number>();
+  const subfolderCounts = new Map<string, number>();
 
   for (const file of files) {
     if (!isAudioFile(file.name)) continue;
-    const path = basePaths?.get(file) || (file as any).webkitRelativePath || '';
-    const parts = path.split('/');
+
+    const relativePath = getRelativePath(file, basePaths);
+    const parts = relativePath.split('/').filter(Boolean);
     if (parts.length < 2) continue;
 
-    const folder = parts.slice(0, -1).join('/');
-    folderMap.set(folder, (folderMap.get(folder) || 0) + 1);
+    const rootPath = parts[0];
+    rootCounts.set(rootPath, (rootCounts.get(rootPath) || 0) + 1);
+
+    const leafFolderPath = parts.slice(0, -1).join('/');
+    if (leafFolderPath !== rootPath) {
+      subfolderCounts.set(leafFolderPath, (subfolderCounts.get(leafFolderPath) || 0) + 1);
+    }
   }
 
-  return Array.from(folderMap.entries())
-    .map(([path, count]) => ({
+  const roots: FolderPlaylist[] = Array.from(rootCounts.entries())
+    .map(([path, fileCount]) => ({
       path,
       name: path,
-      fileCount: count,
+      fileCount,
+      isRoot: true,
+      depth: 1,
     }))
-    .sort((a, b) => a.path.localeCompare(b.path));
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const subfolders: FolderPlaylist[] = Array.from(subfolderCounts.entries())
+    .map(([path, fileCount]) => ({
+      path,
+      name: path,
+      fileCount,
+      isRoot: false,
+      depth: pathDepth(path),
+    }))
+    .sort((a, b) => {
+      if (a.depth !== b.depth) return a.depth - b.depth;
+      return a.name.localeCompare(b.name);
+    });
+
+  return [...roots, ...subfolders];
+}
+
+function createPreScanBackup(): ScanBackupSnapshot | null {
+  try {
+    const b64 = exportDatabaseBase64();
+    const timestamp = new Date().toISOString();
+    const entry: ScanBackupSnapshot = {
+      id: `scan-${Date.now()}`,
+      timestamp,
+      trackCount: getTrackCount(),
+      playlistCount: getPlaylistCount(),
+      data: b64,
+    };
+
+    const settings = loadSettings();
+    saveBackupEntry(entry, settings.maxBackups);
+
+    return entry;
+  } catch (error) {
+    console.warn('Pre-scan backup failed, continuing import without rollback snapshot', error);
+    return null;
+  }
+}
+
+function pushTrackToBucket(bucket: Map<string, number[]>, path: string, trackId: number): void {
+  if (!bucket.has(path)) bucket.set(path, []);
+  bucket.get(path)!.push(trackId);
 }
 
 async function parseMetadata(file: File): Promise<Partial<Track>> {
@@ -79,13 +164,12 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
     if (common.bpm) bpm = common.bpm;
     if (common.key) key = common.key;
     if (common.year) year = common.year;
-    if (common.comment?.length) comment = common.comment.map((c: any) => typeof c === 'string' ? c : c.text || '').join('; ');
+    if (common.comment?.length) comment = common.comment.map((c: any) => (typeof c === 'string' ? c : c.text || '')).join('; ');
     if (format.duration) duration = format.duration;
     if (format.bitrate) bitrate = Math.round(format.bitrate / 1000);
     if (format.sampleRate) sampleRate = format.sampleRate;
   } catch (err) {
     console.warn('Metadata parse failed for', file.name, err);
-    // Fallback to filename parsing
     const dashSplit = title.split(' - ');
     if (dashSplit.length >= 2) {
       artist = dashSplit[0].trim();
@@ -93,7 +177,21 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
     }
   }
 
-  return { title, artist, album, genre, bpm, key, duration, bitrate, sample_rate: sampleRate, year, comment, file_name: file.name, file_size: file.size };
+  return {
+    title,
+    artist,
+    album,
+    genre,
+    bpm,
+    key,
+    duration,
+    bitrate,
+    sample_rate: sampleRate,
+    year,
+    comment,
+    file_name: file.name,
+    file_size: file.size,
+  };
 }
 
 export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onAddToPlaylist }: FileImporterProps) {
@@ -104,45 +202,123 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
-  // Folder playlist creation
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const [pendingBasePaths, setPendingBasePaths] = useState<Map<File, string> | null>(null);
   const [folderPlaylists, setFolderPlaylists] = useState<FolderPlaylist[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [showFolderStep, setShowFolderStep] = useState(false);
 
-  const processFiles = useCallback(
-    async (files: File[], basePaths?: Map<File, string>) => {
+  const runImport = useCallback(
+    async (files: File[], basePaths?: Map<File, string>, activeSelectedFolders: Set<string> = new Set()) => {
+      const audioFiles = files.filter((file) => isAudioFile(file.name));
       setImporting(true);
       setShowFolderStep(false);
-      const audioFiles = files.filter(f => isAudioFile(f.name));
       setProgress({ current: 0, total: audioFiles.length, phase: 'Reading metadata & importing…' });
+
       const newResults: ImportResult[] = [];
+      const folderTracks = new Map<string, number[]>();
+      const backupSnapshot = createPreScanBackup();
 
       try {
         let idx = 0;
         for (const file of audioFiles) {
-          idx++;
+          idx += 1;
           setProgress({ current: idx, total: audioFiles.length, phase: file.name });
 
           try {
             const trackData = await parseMetadata(file);
-            const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
+            const filePath = getRelativePath(file, basePaths);
             trackData.file_path = filePath;
 
-            await onImport(trackData);
-            newResults.push({ fileName: file.name, status: 'success' });
-          } catch (err) {
-            console.error('Import failed for', file.name, err);
+            const trackId = await onImport(trackData);
+            newResults.push({ fileName: file.name, status: 'success', trackId: trackId ?? undefined });
+
+            if (trackId && activeSelectedFolders.size > 0) {
+              const parts = filePath.split('/').filter(Boolean);
+              if (parts.length >= 2) {
+                const rootPath = parts[0];
+                const leafFolderPath = parts.slice(0, -1).join('/');
+
+                if (activeSelectedFolders.has(rootPath)) {
+                  pushTrackToBucket(folderTracks, rootPath, trackId);
+                }
+
+                if (leafFolderPath !== rootPath && activeSelectedFolders.has(leafFolderPath)) {
+                  pushTrackToBucket(folderTracks, leafFolderPath, trackId);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Import failed for', file.name, error);
             newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
           }
 
-          if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
+          if (idx % 12 === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
         }
 
-        // Save database once after all imports
+        if (activeSelectedFolders.size > 0 && folderTracks.size > 0) {
+          const orderedPlaylistPaths = Array.from(folderTracks.keys()).sort((a, b) => {
+            const depthDiff = pathDepth(a) - pathDepth(b);
+            if (depthDiff !== 0) return depthDiff;
+            return a.localeCompare(b);
+          });
+
+          setProgress({ current: 0, total: orderedPlaylistPaths.length, phase: 'Creating playlists…' });
+          let playlistIdx = 0;
+
+          for (const playlistPath of orderedPlaylistPaths) {
+            playlistIdx += 1;
+            setProgress({
+              current: playlistIdx,
+              total: orderedPlaylistPaths.length,
+              phase: `Playlist: ${pathToPlaylistName(playlistPath)}`,
+            });
+
+            try {
+              const playlistId = await onCreatePlaylist(pathToPlaylistName(playlistPath));
+              const trackIds = folderTracks.get(playlistPath) || [];
+              for (const trackId of trackIds) {
+                await onAddToPlaylist(playlistId, trackId);
+              }
+            } catch (error) {
+              console.error('Playlist creation failed for', playlistPath, error);
+            }
+          }
+        }
+
         saveDatabase();
         await onImportComplete?.();
+        setResults(newResults);
+      } catch (error) {
+        console.error('Import session aborted:', error);
+
+        if (backupSnapshot?.data) {
+          try {
+            await restoreDatabaseFromBase64(backupSnapshot.data);
+            await onImportComplete?.();
+            newResults.push({
+              fileName: 'Import session',
+              status: 'error',
+              message: 'Import aborted. Collection restored from pre-scan backup.',
+            });
+          } catch (restoreError) {
+            console.error('Failed to restore from pre-scan backup:', restoreError);
+            newResults.push({
+              fileName: 'Import session',
+              status: 'error',
+              message: 'Import aborted and backup restore failed. Use Backups to recover.',
+            });
+          }
+        } else {
+          newResults.push({
+            fileName: 'Import session',
+            status: 'error',
+            message: 'Import aborted. No pre-scan backup was available.',
+          });
+        }
+
         setResults(newResults);
       } finally {
         setImporting(false);
@@ -150,7 +326,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
         setPendingBasePaths(null);
       }
     },
-    [onImport, onImportComplete]
+    [onAddToPlaylist, onCreatePlaylist, onImport, onImportComplete]
   );
 
   const handleFilesReceived = useCallback(
@@ -161,95 +337,24 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
         setPendingFiles(files);
         setPendingBasePaths(basePaths || null);
         setFolderPlaylists(folders);
-        setSelectedFolders(new Set(folders.map(f => f.path)));
+        setSelectedFolders(new Set(folders.map((folder) => folder.path)));
         setShowFolderStep(true);
       } else {
-        processFiles(files, basePaths);
+        runImport(files, basePaths);
       }
     },
-    [processFiles]
+    [runImport]
   );
 
-  const handleImportWithPlaylists = useCallback(async (selectedOverride?: Set<string>) => {
-    if (!pendingFiles) return;
-    const basePaths = pendingBasePaths || undefined;
-    const activeSelectedFolders = selectedOverride ?? selectedFolders;
-
-    setImporting(true);
-    setShowFolderStep(false);
-    const audioFiles = pendingFiles.filter(f => isAudioFile(f.name));
-    setProgress({ current: 0, total: audioFiles.length, phase: 'Reading metadata & importing…' });
-    const newResults: ImportResult[] = [];
-
-    // Collect imported tracks grouped by folder
-    const folderTracks = new Map<string, number[]>();
-
-    try {
-      let idx = 0;
-      for (const file of audioFiles) {
-        idx++;
-        setProgress({ current: idx, total: audioFiles.length, phase: file.name });
-
-        try {
-          const trackData = await parseMetadata(file);
-          const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
-          trackData.file_path = filePath;
-
-          const trackId = await onImport(trackData);
-          newResults.push({ fileName: file.name, status: 'success', trackId: trackId ?? undefined });
-
-          // Group by folder for playlist creation
-          if (trackId) {
-            const parts = filePath.split('/');
-            if (parts.length >= 2) {
-              const folder = parts.slice(0, -1).join('/');
-              if (activeSelectedFolders.has(folder)) {
-                if (!folderTracks.has(folder)) folderTracks.set(folder, []);
-                folderTracks.get(folder)!.push(trackId);
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Import failed for', file.name, err);
-          newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
-        }
-
-        if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
-      }
-
-      // Save database after all track imports
-      saveDatabase();
-
-      // Create playlists from selected folders and add tracks
-      if (activeSelectedFolders.size > 0 && folderTracks.size > 0) {
-        setProgress({ current: 0, total: folderTracks.size, phase: 'Creating playlists…' });
-        let plIdx = 0;
-        for (const [folder, trackIds] of folderTracks) {
-          plIdx++;
-          const folderName = folder.replace(/\//g, ' / ');
-          setProgress({ current: plIdx, total: folderTracks.size, phase: `Playlist: ${folderName}` });
-          try {
-            const playlistId = await onCreatePlaylist(folderName);
-            for (const tid of trackIds) {
-              await onAddToPlaylist(playlistId, tid);
-            }
-          } catch (err) {
-            console.error('Playlist creation failed for', folder, err);
-          }
-        }
-
-        // Save after all playlists created
-        saveDatabase();
-      }
-
-      await onImportComplete?.();
-      setResults(newResults);
-    } finally {
-      setImporting(false);
-      setPendingFiles(null);
-      setPendingBasePaths(null);
-    }
-  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, onImportComplete, onCreatePlaylist, onAddToPlaylist]);
+  const handleImportWithPlaylists = useCallback(
+    async (selectedOverride?: Set<string>) => {
+      if (!pendingFiles) return;
+      const basePaths = pendingBasePaths || undefined;
+      const activeSelectedFolders = selectedOverride ?? selectedFolders;
+      await runImport(pendingFiles, basePaths, activeSelectedFolders);
+    },
+    [pendingFiles, pendingBasePaths, selectedFolders, runImport]
+  );
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
@@ -257,29 +362,25 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       setDragOver(false);
 
       const items = e.dataTransfer.items;
-      if (items && items.length > 0) {
-        const allFiles: File[] = [];
-        const basePaths = new Map<File, string>();
+      if (!items || items.length === 0) return;
 
-        const entries: FileSystemEntry[] = [];
-        for (let i = 0; i < items.length; i++) {
-          const entry = items[i].webkitGetAsEntry?.();
-          if (entry) entries.push(entry);
-        }
+      const entries: FileSystemEntry[] = [];
+      for (let i = 0; i < items.length; i += 1) {
+        const entry = items[i].webkitGetAsEntry?.();
+        if (entry) entries.push(entry);
+      }
 
-        if (entries.length > 0) {
-          for (const entry of entries) {
-            await readEntry(entry, '', allFiles, basePaths);
-          }
-        } else {
-          for (const file of Array.from(e.dataTransfer.files)) {
-            allFiles.push(file);
-          }
-        }
-
+      if (entries.length > 0) {
+        const { allFiles, basePaths } = await collectDroppedEntries(entries);
         if (allFiles.length > 0) {
           handleFilesReceived(allFiles, basePaths);
+          return;
         }
+      }
+
+      const fallbackFiles = Array.from(e.dataTransfer.files);
+      if (fallbackFiles.length > 0) {
+        handleFilesReceived(fallbackFiles);
       }
     },
     [handleFilesReceived]
@@ -290,10 +391,12 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       if (e.target.files && e.target.files.length > 0) {
         const files = Array.from(e.target.files);
         const basePaths = new Map<File, string>();
-        files.forEach(f => {
-          const relPath = (f as any).webkitRelativePath || f.name;
-          basePaths.set(f, relPath);
+
+        files.forEach((file) => {
+          const relPath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+          basePaths.set(file, normalizeRelativePath(relPath));
         });
+
         handleFilesReceived(files, basePaths);
       }
     },
@@ -301,7 +404,10 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
   );
 
   const toggleFolder = (path: string) => {
-    setSelectedFolders(prev => {
+    const folder = folderPlaylists.find((entry) => entry.path === path);
+    if (folder?.isRoot) return;
+
+    setSelectedFolders((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
@@ -309,61 +415,77 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
     });
   };
 
-  const audioResults = results.filter((r) => r.status === 'success' || r.status === 'error');
+  const audioResults = results.filter((result) => result.status === 'success' || result.status === 'error');
 
   return (
     <div className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Import Audio Files</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Scan files or folders to add to your collection. Metadata is read from ID3 tags. Folders become playlists automatically.
+          Scan files or folders to add to your collection. Metadata is read from tags and a pre-scan backup is created automatically.
         </p>
       </div>
 
-      {/* Folder Playlist Step */}
       {showFolderStep && !importing && (
         <div className="bg-card border border-border rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
             <ListMusic className="w-5 h-5 text-primary" />
-            <p className="text-sm font-semibold text-foreground">Create playlists from folders?</p>
+            <p className="text-sm font-semibold text-foreground">Create playlists from folder hierarchy</p>
           </div>
           <p className="text-xs text-muted-foreground">
-            Found {folderPlaylists.length} folders. Select which ones to turn into playlists:
+            Root folders are required and created first. Subfolders become additional playlists.
           </p>
           <div className="max-h-48 overflow-y-auto space-y-1">
-            {folderPlaylists.map(fp => (
-              <label key={fp.path} className="flex items-center gap-3 px-3 py-1.5 rounded hover:bg-secondary/40 cursor-pointer transition-colors">
+            {folderPlaylists.map((folder) => (
+              <label
+                key={folder.path}
+                className="flex items-center gap-3 px-3 py-1.5 rounded hover:bg-secondary/40 cursor-pointer transition-colors"
+              >
                 <Checkbox
-                  checked={selectedFolders.has(fp.path)}
-                  onCheckedChange={() => toggleFolder(fp.path)}
+                  checked={selectedFolders.has(folder.path)}
+                  disabled={folder.isRoot}
+                  onCheckedChange={() => toggleFolder(folder.path)}
                 />
-                <span className="text-sm flex-1 truncate">{fp.name}</span>
-                <span className="text-[10px] font-mono text-muted-foreground">{fp.fileCount} files</span>
+                <span className="text-sm flex-1 truncate">{pathToPlaylistName(folder.name)}</span>
+                {folder.isRoot && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                    ROOT
+                  </span>
+                )}
+                <span className="text-[10px] font-mono text-muted-foreground">{folder.fileCount} files</span>
               </label>
             ))}
           </div>
           <div className="flex gap-2 pt-1">
             <Button size="sm" onClick={() => handleImportWithPlaylists()}>
-              Import {pendingFiles?.filter(f => isAudioFile(f.name)).length} tracks
+              Import {pendingFiles?.filter((file) => isAudioFile(file.name)).length} tracks
             </Button>
-            <Button variant="outline" size="sm" onClick={() => {
-              const none = new Set<string>();
-              setSelectedFolders(none);
-              handleImportWithPlaylists(none);
-            }}>
-              Import without playlists
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const requiredRoots = new Set(folderPlaylists.filter((folder) => folder.isRoot).map((folder) => folder.path));
+                setSelectedFolders(requiredRoots);
+                handleImportWithPlaylists(requiredRoots);
+              }}
+            >
+              Root playlists only
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => {
-              setShowFolderStep(false);
-              setPendingFiles(null);
-            }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowFolderStep(false);
+                setPendingFiles(null);
+                setPendingBasePaths(null);
+              }}
+            >
               Cancel
             </Button>
           </div>
         </div>
       )}
 
-      {/* Drop Zone */}
       {!showFolderStep && (
         <div
           onDragOver={(e) => {
@@ -378,7 +500,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
           <div className="text-center">
             <p className="text-sm text-foreground">Drag & drop audio files or folders here</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Supports MP3, WAV, FLAC, AIFF, M4A • ID3 tags auto-read • Folders → Playlists
+              Supports MP3, WAV, FLAC, AIFF, M4A • Metadata auto-read • Root + subfolder playlists
             </p>
           </div>
           <div className="flex gap-2">
@@ -426,12 +548,13 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
         </div>
       )}
 
-      {/* Progress */}
       {importing && (
         <div className="space-y-2 px-4">
           <div className="flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-primary" />
-            <span className="text-sm text-foreground">{progress.current}/{progress.total}</span>
+            <span className="text-sm text-foreground">
+              {progress.current}/{progress.total}
+            </span>
           </div>
           <p className="text-xs text-muted-foreground truncate">{progress.phase}</p>
           <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -443,23 +566,20 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
         </div>
       )}
 
-      {/* Results */}
       {audioResults.length > 0 && !importing && (
         <div className="space-y-1">
-          <p className="panel-header">
-            Imported {audioResults.filter((r) => r.status === 'success').length} tracks
-          </p>
+          <p className="panel-header">Imported {audioResults.filter((result) => result.status === 'success').length} tracks</p>
           <div className="max-h-60 overflow-y-auto">
-            {audioResults.map((r, i) => (
-              <div key={i} className="flex items-center gap-2 px-4 py-1.5 text-sm">
-                {r.status === 'success' ? (
+            {audioResults.map((result, idx) => (
+              <div key={idx} className="flex items-center gap-2 px-4 py-1.5 text-sm">
+                {result.status === 'success' ? (
                   <Check className="w-3.5 h-3.5 shrink-0 text-primary" />
                 ) : (
                   <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
                 )}
                 <FileAudio className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span className="truncate flex-1">{r.fileName}</span>
-                {r.message && <span className="text-xs text-muted-foreground">{r.message}</span>}
+                <span className="truncate flex-1">{result.fileName}</span>
+                {result.message && <span className="text-xs text-muted-foreground">{result.message}</span>}
               </div>
             ))}
           </div>
@@ -469,38 +589,49 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
   );
 }
 
-// Recursively read file system entries from drag & drop
-async function readEntry(
-  entry: FileSystemEntry,
-  path: string,
-  allFiles: File[],
-  basePaths: Map<File, string>
-): Promise<void> {
-  if (entry.isFile) {
-    const file = await new Promise<File>((resolve) =>
-      (entry as FileSystemFileEntry).file(resolve)
-    );
-    const fullPath = path ? `${path}/${file.name}` : file.name;
-    basePaths.set(file, fullPath);
-    allFiles.push(file);
-  } else if (entry.isDirectory) {
-    const dirReader = (entry as FileSystemDirectoryEntry).createReader();
+async function readDirectoryEntries(dirReader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  const allEntries: FileSystemEntry[] = [];
 
-    const readAllEntries = async (): Promise<FileSystemEntry[]> => {
-      const allEntries: FileSystemEntry[] = [];
-      while (true) {
-        const batch = await new Promise<FileSystemEntry[]>((resolve) =>
-          dirReader.readEntries(resolve)
-        );
-        if (batch.length === 0) break;
-        allEntries.push(...batch);
+  while (true) {
+    const batch = await new Promise<FileSystemEntry[]>((resolve) => dirReader.readEntries(resolve));
+    if (batch.length === 0) break;
+    allEntries.push(...batch);
+  }
+
+  return allEntries;
+}
+
+async function collectDroppedEntries(entries: FileSystemEntry[]): Promise<{ allFiles: File[]; basePaths: Map<File, string> }> {
+  const allFiles: File[] = [];
+  const basePaths = new Map<File, string>();
+  const queue: Array<{ entry: FileSystemEntry; parentPath: string }> = entries.map((entry) => ({
+    entry,
+    parentPath: '',
+  }));
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    const { entry, parentPath } = current;
+
+    if (entry.isFile) {
+      const file = await new Promise<File>((resolve) => (entry as FileSystemFileEntry).file(resolve));
+      const fullPath = normalizeRelativePath(parentPath ? `${parentPath}/${file.name}` : file.name);
+      basePaths.set(file, fullPath);
+      allFiles.push(file);
+      continue;
+    }
+
+    if (entry.isDirectory) {
+      const directoryPath = normalizeRelativePath(parentPath ? `${parentPath}/${entry.name}` : entry.name);
+      const children = await readDirectoryEntries((entry as FileSystemDirectoryEntry).createReader());
+
+      for (const child of children) {
+        queue.push({ entry: child, parentPath: directoryPath });
       }
-      return allEntries;
-    };
-
-    const entries = await readAllEntries();
-    for (const child of entries) {
-      await readEntry(child, path ? `${path}/${entry.name}` : entry.name, allFiles, basePaths);
     }
   }
+
+  return { allFiles, basePaths };
 }

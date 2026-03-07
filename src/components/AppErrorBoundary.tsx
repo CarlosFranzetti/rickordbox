@@ -16,9 +16,30 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     return { hasError: true };
   }
 
+  componentDidMount(): void {
+    window.addEventListener('error', this.handleGlobalError);
+    window.addEventListener('unhandledrejection', this.handleUnhandledRejection);
+  }
+
+  componentWillUnmount(): void {
+    window.removeEventListener('error', this.handleGlobalError);
+    window.removeEventListener('unhandledrejection', this.handleUnhandledRejection);
+  }
+
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('App crashed:', error, errorInfo);
   }
+
+  handleGlobalError = (event: ErrorEvent) => {
+    console.error('Unhandled window error:', event.error || event.message);
+    this.setState({ hasError: true });
+  };
+
+  handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    event.preventDefault();
+    this.setState({ hasError: true });
+  };
 
   handleReload = () => {
     window.location.reload();

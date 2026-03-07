@@ -184,7 +184,7 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
               <Settings className="w-5 h-5 text-primary" />
               Settings
             </DialogTitle>
-            <DialogDescription>Configure your PioneerExport workspace</DialogDescription>
+            <DialogDescription>Configure your RIckordBox workspace</DialogDescription>
           </DialogHeader>
 
           {/* Tabs */}

@@ -46,7 +46,7 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
           USB Export
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Export copies your tracks to the USB in the proper Pioneer folder structure and generates the hardware-readable database (export.pdb).
+          Export copies your tracks to the USB in the proper rekordbox folder structure and generates the hardware-readable database (export.pdb).
         </p>
       </div>
 

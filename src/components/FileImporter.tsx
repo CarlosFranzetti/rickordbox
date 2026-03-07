@@ -340,8 +340,9 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
               Import {pendingFiles?.filter(f => isAudioFile(f.name)).length} tracks
             </Button>
             <Button variant="outline" size="sm" onClick={() => {
-              setSelectedFolders(new Set());
-              handleImportWithPlaylists();
+              const none = new Set<string>();
+              setSelectedFolders(none);
+              handleImportWithPlaylists(none);
             }}>
               Import without playlists
             </Button>

@@ -147,7 +147,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       setPendingFiles(null);
       setPendingBasePaths(null);
     },
-    [onImport]
+    [onImport, onImportComplete]
   );
 
   const handleFilesReceived = useCallback(

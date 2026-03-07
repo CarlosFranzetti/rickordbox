@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Music, ListMusic, Upload, HardDrive, Plus, Trash2, Disc3, Settings, ChevronRight, FolderOpen } from 'lucide-react';
+import { Music, ListMusic, Upload, HardDrive, Plus, Trash2, Disc3, Settings, ChevronRight, ChevronDown, Folder, FolderOpen } from 'lucide-react';
 import type { Playlist } from '@/lib/database';
 
 type View = 'collection' | 'import' | 'export' | 'settings';
@@ -52,6 +52,13 @@ function buildPlaylistTree(playlists: Playlist[]): PlaylistTreeNode[] {
   return root;
 }
 
+/** Check if any descendant playlist is the active one */
+function hasActiveDescendant(node: PlaylistTreeNode, activeId: number | null): boolean {
+  if (!activeId) return false;
+  if (node.playlist?.id === activeId) return true;
+  return node.children.some(c => hasActiveDescendant(c, activeId));
+}
+
 function PlaylistNode({
   node,
   depth,
@@ -65,46 +72,84 @@ function PlaylistNode({
   onPlaylistSelect: (id: number) => void;
   onDeletePlaylist: (id: number) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const hasChildren = node.children.length > 0;
   const isActive = node.playlist && activePlaylistId === node.playlist.id;
+  // Auto-expand if a descendant is active
+  const [expanded, setExpanded] = useState(() => hasActiveDescendant(node, activePlaylistId));
+  const isFolder = hasChildren && !node.playlist;
+
+  const handleClick = () => {
+    if (node.playlist) {
+      onPlaylistSelect(node.playlist.id);
+    }
+    if (hasChildren) {
+      setExpanded(!expanded);
+    }
+  };
 
   return (
     <div>
+      {/* Node row */}
       <div
-        className={`sidebar-item group ${isActive ? 'sidebar-item-active' : ''}`}
-        style={{ paddingLeft: `${8 + depth * 12}px` }}
-        onClick={() => {
-          if (node.playlist) onPlaylistSelect(node.playlist.id);
-          if (hasChildren) setExpanded(!expanded);
-        }}
+        className={`group flex items-center gap-1.5 py-1 pr-2 cursor-pointer text-sm transition-colors rounded-sm
+          ${isActive
+            ? 'bg-primary/15 text-primary'
+            : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
+          }`}
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
+        onClick={handleClick}
       >
+        {/* Expand/collapse chevron */}
         {hasChildren ? (
-          <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            className="w-4 h-4 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            {expanded
+              ? <ChevronDown className="w-3 h-3" />
+              : <ChevronRight className="w-3 h-3" />
+            }
+          </button>
         ) : (
-          <span className="w-3" />
+          <span className="w-4 shrink-0" />
         )}
-        {hasChildren && !node.playlist ? (
-          <FolderOpen className="w-4 h-4 shrink-0" />
+
+        {/* Icon: folder vs playlist */}
+        {isFolder ? (
+          expanded
+            ? <FolderOpen className="w-4 h-4 shrink-0 text-accent" />
+            : <Folder className="w-4 h-4 shrink-0 text-accent" />
         ) : (
-          <ListMusic className="w-4 h-4 shrink-0" />
+          <ListMusic className="w-4 h-4 shrink-0 text-primary/70" />
         )}
-        <span className="truncate flex-1 text-sm">{node.segment}</span>
+
+        {/* Label */}
+        <span className={`truncate flex-1 ${isActive ? 'font-medium' : ''}`}>
+          {node.segment}
+        </span>
+
+        {/* Track count badge */}
         {node.playlist && (
-          <>
-            <span className="text-[10px] font-mono text-muted-foreground">{node.playlist.track_count || 0}</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeletePlaylist(node.playlist!.id);
-              }}
-              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </>
+          <span className="text-[10px] font-mono text-muted-foreground tabular-nums ml-auto">
+            {node.playlist.track_count || 0}
+          </span>
+        )}
+
+        {/* Delete button */}
+        {node.playlist && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeletePlaylist(node.playlist!.id);
+            }}
+            className="opacity-0 group-hover:opacity-100 w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-destructive transition-all shrink-0"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
         )}
       </div>
+
+      {/* Children */}
       {hasChildren && expanded && (
         <div>
           {node.children.map((child) => (
@@ -138,9 +183,9 @@ export function AppSidebar({
   const tree = buildPlaylistTree(playlists);
 
   return (
-    <div className="w-60 h-full bg-sidebar flex flex-col border-r border-border">
+    <div className="w-60 h-full bg-sidebar flex flex-col border-r border-sidebar-border">
       {/* Logo */}
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <Disc3 className="w-6 h-6 text-primary glow-text" />
           <span className="font-semibold text-foreground tracking-tight">PioneerExport</span>
@@ -181,10 +226,10 @@ export function AppSidebar({
         </button>
       </nav>
 
-      {/* Playlists */}
+      {/* Playlists / Explorer tree */}
       <div className="flex-1 overflow-y-auto">
         <div className="panel-header flex items-center justify-between">
-          <span>Playlists</span>
+          <span>Explorer</span>
           <button
             onClick={onCreatePlaylist}
             className="text-muted-foreground hover:text-primary transition-colors"
@@ -192,9 +237,9 @@ export function AppSidebar({
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
-        <div className="p-2 space-y-0.5">
+        <div className="py-1">
           {playlists.length === 0 && (
-            <p className="text-xs text-muted-foreground px-3 py-2">No playlists yet</p>
+            <p className="text-xs text-muted-foreground px-4 py-3">No playlists yet</p>
           )}
           {tree.map((node) => (
             <PlaylistNode
@@ -210,7 +255,7 @@ export function AppSidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-border space-y-2">
+      <div className="p-3 border-t border-sidebar-border space-y-2">
         {footerSlot}
         <p className="text-[10px] text-muted-foreground font-mono">SQLite in-browser • Local only</p>
       </div>

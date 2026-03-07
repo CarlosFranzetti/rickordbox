@@ -83,7 +83,12 @@ const Index = () => {
           <TrackTable
             tracks={playlistTracks}
             playlists={db.playlists}
-            title={db.playlists.find((p) => p.id === activePlaylistId)?.name || 'Playlist'}
+            title={(() => {
+              const pl = db.playlists.find((p) => p.id === activePlaylistId);
+              if (!pl) return 'Playlist';
+              const parts = pl.name.split(' / ');
+              return parts[parts.length - 1];
+            })()}
             onDeleteTrack={db.deleteTrack}
             onUpdateTrack={db.updateTrack}
             onAddToPlaylist={db.addToPlaylist}

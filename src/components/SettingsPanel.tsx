@@ -37,6 +37,12 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
   const [scrapeResult, setScrapeResult] = useState<{ matched: number; failed: number } | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
+  // Re-scan metadata state
+  const [rescanning, setRescanning] = useState(false);
+  const [rescanProgress, setRescanProgress] = useState({ current: 0, total: 0, fileName: '' });
+  const [rescanResult, setRescanResult] = useState<{ updated: number; skipped: number; failed: number } | null>(null);
+  const rescanInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (open) {
       setSettings(loadSettings());

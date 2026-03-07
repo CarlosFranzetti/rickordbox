@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Upload, FileAudio, FolderOpen, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Track } from '@/lib/database';
+import * as mm from 'music-metadata-browser';
 
 interface FileImporterProps {
   onImport: (track: Partial<Track>) => Promise<void>;
@@ -35,40 +36,75 @@ export function FileImporter({ onImport }: FileImporterProps) {
         const ext = file.name.split('.').pop()?.toLowerCase();
 
         if (!ext || !AUDIO_EXTS.includes(ext)) {
-          continue; // silently skip non-audio
+          continue;
         }
 
         try {
+          // Parse real metadata from audio file using music-metadata-browser
           let title = file.name.replace(/\.[^/.]+$/, '');
           let artist = 'Unknown';
-
-          const dashSplit = title.split(' - ');
-          if (dashSplit.length >= 2) {
-            artist = dashSplit[0].trim();
-            title = dashSplit.slice(1).join(' - ').trim();
-          }
-
-          // Use webkitRelativePath or basePaths for folder imports
-          const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
-
+          let album = '';
+          let genre = '';
+          let bpm = 0;
+          let key = '';
           let duration = 0;
+          let year = 0;
+          let bitrate = 0;
+          let sampleRate = 0;
+          let comment = '';
+
           try {
-            const arrayBuffer = await file.arrayBuffer();
-            const audioContext = new AudioContext();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            duration = audioBuffer.duration;
-            audioContext.close();
+            const metadata = await mm.parseBlob(file);
+            const { common, format } = metadata;
+
+            if (common.title) title = common.title;
+            if (common.artist) artist = common.artist;
+            if (common.album) album = common.album;
+            if (common.genre?.length) genre = common.genre.join(', ');
+            if (common.bpm) bpm = common.bpm;
+            if (common.key) key = common.key;
+            if (common.year) year = common.year;
+            if (common.comment?.length) comment = common.comment.map((c: any) => typeof c === 'string' ? c : c.text || '').join('; ');
+            if (format.duration) duration = format.duration;
+            if (format.bitrate) bitrate = Math.round(format.bitrate / 1000); // kbps
+            if (format.sampleRate) sampleRate = format.sampleRate;
           } catch {
-            // Duration extraction failed
+            // Metadata parsing failed, fall back to filename parsing
+            const dashSplit = title.split(' - ');
+            if (dashSplit.length >= 2) {
+              artist = dashSplit[0].trim();
+              title = dashSplit.slice(1).join(' - ').trim();
+            }
+
+            // Try to get duration via AudioContext as fallback
+            try {
+              const arrayBuffer = await file.arrayBuffer();
+              const audioContext = new AudioContext();
+              const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+              duration = audioBuffer.duration;
+              audioContext.close();
+            } catch {
+              // Duration extraction failed
+            }
           }
+
+          const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
 
           await onImport({
             title,
             artist,
+            album,
+            genre,
+            bpm,
+            key,
+            duration,
+            bitrate,
+            sample_rate: sampleRate,
+            year,
+            comment,
             file_name: file.name,
             file_path: filePath,
             file_size: file.size,
-            duration,
           });
 
           newResults.push({ fileName: file.name, status: 'success' });
@@ -93,7 +129,6 @@ export function FileImporter({ onImport }: FileImporterProps) {
         const allFiles: File[] = [];
         const basePaths = new Map<File, string>();
 
-        // Try to read as directory entries for folder drops
         const entries: FileSystemEntry[] = [];
         for (let i = 0; i < items.length; i++) {
           const entry = items[i].webkitGetAsEntry?.();
@@ -105,7 +140,6 @@ export function FileImporter({ onImport }: FileImporterProps) {
             await readEntry(entry, '', allFiles, basePaths);
           }
         } else {
-          // Fallback to plain files
           for (const file of Array.from(e.dataTransfer.files)) {
             allFiles.push(file);
           }
@@ -135,7 +169,7 @@ export function FileImporter({ onImport }: FileImporterProps) {
       <div>
         <h2 className="text-lg font-semibold text-foreground">Import Audio Files</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Scan files or folders to add to your collection. Tracks stay where they are — export copies them to USB later.
+          Scan files or folders to add to your collection. Metadata (artist, BPM, key, etc.) is read from ID3 tags automatically. Tracks stay where they are — export copies them to USB later.
         </p>
       </div>
 
@@ -153,7 +187,7 @@ export function FileImporter({ onImport }: FileImporterProps) {
         <div className="text-center">
           <p className="text-sm text-foreground">Drag & drop audio files or folders here</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Supports MP3, WAV, FLAC, AIFF, M4A • Original files are never moved
+            Supports MP3, WAV, FLAC, AIFF, M4A • ID3 tags auto-read • Files never moved
           </p>
         </div>
         <div className="flex gap-2">

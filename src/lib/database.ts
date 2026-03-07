@@ -11,7 +11,6 @@ export async function getDatabase(): Promise<Database> {
     locateFile: () => '/sql-wasm.wasm',
   });
 
-  // Try to load from localStorage
   const saved = localStorage.getItem(DB_STORAGE_KEY);
   if (saved) {
     const buf = Uint8Array.from(atob(saved), (c) => c.charCodeAt(0));
@@ -20,7 +19,6 @@ export async function getDatabase(): Promise<Database> {
     db = new SQL.Database();
   }
 
-  // Create tables
   db.run(`
     CREATE TABLE IF NOT EXISTS tracks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,7 +83,23 @@ export function saveDatabase() {
   localStorage.setItem(DB_STORAGE_KEY, b64);
 }
 
-// Track operations
+// Backup: export raw database bytes
+export function exportDatabaseFile(): Uint8Array {
+  if (!db) throw new Error('Database not initialized');
+  return db.export();
+}
+
+// Restore: replace database from raw bytes
+export async function restoreDatabase(data: Uint8Array): Promise<void> {
+  const SQL = await initSqlJs({
+    locateFile: () => '/sql-wasm.wasm',
+  });
+  if (db) db.close();
+  db = new SQL.Database(data);
+  saveDatabase();
+}
+
+// Track types
 export interface Track {
   id: number;
   title: string;
@@ -131,8 +145,8 @@ export async function getAllTracks(): Promise<Track[]> {
 export async function addTrack(track: Partial<Track>): Promise<number> {
   const db = await getDatabase();
   db.run(
-    `INSERT INTO tracks (title, artist, album, genre, bpm, key, duration, bitrate, sample_rate, file_name, file_path, file_size, file_hash, year)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tracks (title, artist, album, genre, bpm, key, duration, bitrate, sample_rate, file_name, file_path, file_size, file_hash, year, comment)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       track.title || 'Unknown',
       track.artist || 'Unknown',
@@ -148,6 +162,7 @@ export async function addTrack(track: Partial<Track>): Promise<number> {
       track.file_size || 0,
       track.file_hash || '',
       track.year || 0,
+      track.comment || '',
     ]
   );
   saveDatabase();
@@ -236,6 +251,15 @@ export async function getPlaylistTracks(playlistId: number): Promise<Track[]> {
   return results[0].values.map((row) => rowToTrack(results[0].columns, row));
 }
 
+// Reorder tracks in a playlist
+export async function reorderPlaylistTracks(playlistId: number, trackIds: number[]): Promise<void> {
+  const db = await getDatabase();
+  trackIds.forEach((trackId, idx) => {
+    db.run('UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?', [idx + 1, playlistId, trackId]);
+  });
+  saveDatabase();
+}
+
 // Export preview
 export interface ExportManifest {
   basePath: string;
@@ -305,7 +329,6 @@ function rowToTrack(columns: string[], row: any[]): Track {
   return obj as Track;
 }
 
-// Format duration
 export function formatDuration(seconds: number): string {
   if (!seconds) return '0:00';
   const m = Math.floor(seconds / 60);

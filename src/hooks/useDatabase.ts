@@ -11,10 +11,13 @@ import {
   addTrackToPlaylist,
   removeTrackFromPlaylist,
   getPlaylistTracks,
+  reorderPlaylistTracks,
   generateExportManifest,
+  exportDatabaseFile,
+  restoreDatabase,
   type Track,
   type Playlist,
-  type ExportManifest,
+  
 } from '@/lib/database';
 
 export function useDatabase() {
@@ -78,9 +81,30 @@ export function useDatabase() {
     return getPlaylistTracks(playlistId);
   }, []);
 
+  const handleReorderPlaylistTracks = useCallback(async (playlistId: number, trackIds: number[]) => {
+    await reorderPlaylistTracks(playlistId, trackIds);
+    await refresh();
+  }, [refresh]);
+
   const handleGenerateExport = useCallback(async (playlistIds: number[]) => {
     return generateExportManifest(playlistIds);
   }, []);
+
+  const handleBackup = useCallback(() => {
+    const data = exportDatabaseFile();
+    const blob = new Blob([new Uint8Array(data)], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pioneer-export-backup-${new Date().toISOString().slice(0, 10)}.db`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleRestore = useCallback(async (data: Uint8Array) => {
+    await restoreDatabase(data);
+    await refresh();
+  }, [refresh]);
 
   return {
     ready,
@@ -96,6 +120,9 @@ export function useDatabase() {
     addToPlaylist: handleAddToPlaylist,
     removeFromPlaylist: handleRemoveFromPlaylist,
     getPlaylistTracks: handleGetPlaylistTracks,
+    reorderPlaylistTracks: handleReorderPlaylistTracks,
     generateExport: handleGenerateExport,
+    backup: handleBackup,
+    restore: handleRestore,
   };
 }

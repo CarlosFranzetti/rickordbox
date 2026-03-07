@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ReactNode } from 'react';
 import { Music, ListMusic, Upload, HardDrive, Plus, Trash2, Disc3 } from 'lucide-react';
 import type { Playlist } from '@/lib/database';
 
@@ -13,6 +13,7 @@ interface AppSidebarProps {
   onCreatePlaylist: () => void;
   onDeletePlaylist: (id: number) => void;
   trackCount: number;
+  footerSlot?: ReactNode;
 }
 
 export function AppSidebar({
@@ -24,6 +25,7 @@ export function AppSidebar({
   onCreatePlaylist,
   onDeletePlaylist,
   trackCount,
+  footerSlot,
 }: AppSidebarProps) {
   return (
     <div className="w-60 h-full bg-sidebar flex flex-col border-r border-border">
@@ -101,7 +103,8 @@ export function AppSidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-border space-y-2">
+        {footerSlot}
         <p className="text-[10px] text-muted-foreground font-mono">SQLite in-browser • Local only</p>
       </div>
     </div>

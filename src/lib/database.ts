@@ -216,6 +216,8 @@ export async function addTrack(track: Partial<Track>): Promise<number> {
       if (track.sample_rate) updates.sample_rate = track.sample_rate;
       if (track.year) updates.year = track.year;
       if (track.comment) updates.comment = track.comment;
+      if (track.label) updates.label = track.label;
+      if (track.cover_art_url) updates.cover_art_url = track.cover_art_url;
       if (track.file_size) updates.file_size = track.file_size;
       if (Object.keys(updates).length > 0) {
         const fields = Object.keys(updates).map((k) => `${k} = ?`);

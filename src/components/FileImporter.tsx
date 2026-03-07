@@ -101,7 +101,8 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
       if (format.duration) duration = format.duration;
       if (format.bitrate) bitrate = Math.round(format.bitrate / 1000);
       if (format.sampleRate) sampleRate = format.sampleRate;
-    } catch {
+    } catch (err) {
+      console.warn('Metadata parse failed for', file.name, err);
       // Fallback to filename parsing
       const dashSplit = title.split(' - ');
       if (dashSplit.length >= 2) {

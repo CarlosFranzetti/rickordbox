@@ -91,7 +91,17 @@ const Index = () => {
           />
         )}
       </main>
+
+      <CreatePlaylistDialog
+        open={showCreatePlaylist}
+        onOpenChange={setShowCreatePlaylist}
+        onCreate={(name) => db.createPlaylist(name)}
+      />
     </div>
+  );
+};
+
+export default Index;
   );
 };
 

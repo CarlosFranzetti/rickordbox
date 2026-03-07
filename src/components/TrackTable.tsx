@@ -238,12 +238,12 @@ export function TrackTable({
       )}
 
       {/* Table Header */}
-      <div className={`grid gap-2 px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground border-b border-border ${canReorder ? 'grid-cols-[24px_2fr_1.5fr_1fr_0.8fr_80px_60px_40px]' : 'grid-cols-[2fr_1.5fr_1fr_0.8fr_80px_60px_40px]'}`}>
+      <div className={`grid gap-2 px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground border-b border-border ${canReorder ? 'grid-cols-[24px_minmax(80px,2fr)_minmax(60px,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)_70px_50px_32px]' : 'grid-cols-[minmax(80px,2fr)_minmax(60px,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)_70px_50px_32px]'}`}>
         {canReorder && <span></span>}
         <span>Title</span>
         <span>Artist</span>
-        <span>Album</span>
-        <span>Genre</span>
+        <span className="hidden md:block">Album</span>
+        <span className="hidden lg:block">Genre</span>
         <span>BPM / Key</span>
         <span>Time</span>
         <span></span>

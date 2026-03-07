@@ -370,6 +370,51 @@ export function TrackTable({
           </div>
         ))}
       </div>
+
+      {selectedTrack && (
+        <div className="border-t border-border px-4 py-3 bg-card/40">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+            Selected Track Metadata
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+            <div>
+              <p className="text-muted-foreground">Artist</p>
+              <p className="text-foreground truncate" title={selectedTrack.artist}>{selectedTrack.artist || '—'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Album</p>
+              <p className="text-foreground truncate" title={selectedTrack.album}>{selectedTrack.album || '—'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Genre</p>
+              <p className="text-foreground truncate" title={selectedTrack.genre}>{selectedTrack.genre || '—'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Year</p>
+              <p className="text-foreground">{selectedTrack.year || '—'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">BPM / Key</p>
+              <p className="text-foreground">
+                {selectedTrack.bpm ? selectedTrack.bpm.toFixed(0) : '—'}
+                {selectedTrack.key ? ` / ${selectedTrack.key}` : ''}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Duration</p>
+              <p className="text-foreground">{formatDuration(selectedTrack.duration)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Bitrate</p>
+              <p className="text-foreground">{selectedTrack.bitrate ? `${selectedTrack.bitrate} kbps` : '—'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Sample Rate</p>
+              <p className="text-foreground">{selectedTrack.sample_rate ? `${selectedTrack.sample_rate} Hz` : '—'}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

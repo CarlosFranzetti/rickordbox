@@ -7,6 +7,7 @@ import {
   deleteTrack,
   updateTrack,
   createPlaylist,
+  createPlaylistFast,
   deletePlaylist,
   addTrackToPlaylist,
   removeTrackFromPlaylist,

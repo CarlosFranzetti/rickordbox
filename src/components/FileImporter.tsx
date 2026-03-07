@@ -119,33 +119,36 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       setProgress({ current: 0, total: audioFiles.length, phase: 'Reading metadata & importing…' });
       const newResults: ImportResult[] = [];
 
-      let idx = 0;
-      for (const file of audioFiles) {
-        idx++;
-        setProgress({ current: idx, total: audioFiles.length, phase: file.name });
+      try {
+        let idx = 0;
+        for (const file of audioFiles) {
+          idx++;
+          setProgress({ current: idx, total: audioFiles.length, phase: file.name });
 
-        try {
-          const trackData = await parseMetadata(file);
-          const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
-          trackData.file_path = filePath;
+          try {
+            const trackData = await parseMetadata(file);
+            const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
+            trackData.file_path = filePath;
 
-          await onImport(trackData);
-          newResults.push({ fileName: file.name, status: 'success' });
-        } catch (err) {
-          console.error('Import failed for', file.name, err);
-          newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
+            await onImport(trackData);
+            newResults.push({ fileName: file.name, status: 'success' });
+          } catch (err) {
+            console.error('Import failed for', file.name, err);
+            newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
+          }
+
+          if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
         }
 
-        if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
+        // Save database once after all imports
+        saveDatabase();
+        await onImportComplete?.();
+        setResults(newResults);
+      } finally {
+        setImporting(false);
+        setPendingFiles(null);
+        setPendingBasePaths(null);
       }
-
-      // Save database once after all imports
-      saveDatabase();
-      await onImportComplete?.();
-      setResults(newResults);
-      setImporting(false);
-      setPendingFiles(null);
-      setPendingBasePaths(null);
     },
     [onImport, onImportComplete]
   );

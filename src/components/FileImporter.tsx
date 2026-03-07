@@ -242,7 +242,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
     setImporting(false);
     setPendingFiles(null);
     setPendingBasePaths(null);
-  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, onCreatePlaylist, onAddToPlaylist]);
+  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, onImportComplete, onCreatePlaylist, onAddToPlaylist]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {

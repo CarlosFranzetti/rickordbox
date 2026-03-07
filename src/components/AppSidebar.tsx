@@ -251,10 +251,13 @@ export function AppSidebar({
     <div className="w-60 h-full bg-sidebar flex flex-col border-r border-sidebar-border">
       {/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2">
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
           <Disc3 className="w-6 h-6 text-primary glow-text" />
-          <span className="font-semibold text-foreground tracking-tight">PioneerExport</span>
-        </div>
+          <span className="font-semibold text-foreground tracking-tight">RIckordBox</span>
+        </button>
         <p className="text-[10px] text-muted-foreground mt-1 font-mono">CDJ USB Export Tool</p>
       </div>
 

@@ -330,7 +330,7 @@ export function TrackTable({
             <span className="truncate text-muted-foreground text-xs hidden lg:block">{track.genre || '—'}</span>
 
             {/* Label */}
-            <span className="truncate text-muted-foreground text-xs hidden xl:block">{track.comment || '—'}</span>
+            <span className="truncate text-muted-foreground text-xs hidden xl:block">{track.label || '—'}</span>
 
             {/* Year */}
             <span className="text-muted-foreground text-xs hidden lg:block font-mono">{track.year || '—'}</span>

@@ -103,6 +103,7 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
         if (common.bpm && common.bpm !== track.bpm) updates.bpm = common.bpm;
         if (common.key && common.key !== track.key) updates.key = common.key;
         if (common.year && common.year !== track.year) updates.year = common.year;
+        if (common.label?.length) { const l = common.label.join(', '); if (l !== track.label) updates.label = l; }
         if (common.comment?.length) {
           const c = common.comment.map((x: any) => typeof x === 'string' ? x : x.text || '').join('; ');
           if (c !== track.comment) updates.comment = c;
@@ -110,6 +111,15 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
         if (format.duration && format.duration !== track.duration) updates.duration = format.duration;
         if (format.bitrate) { const br = Math.round(format.bitrate / 1000); if (br !== track.bitrate) updates.bitrate = br; }
         if (format.sampleRate && format.sampleRate !== track.sample_rate) updates.sample_rate = format.sampleRate;
+
+        // Extract embedded cover art
+        if (common.picture?.length && !track.cover_art_url) {
+          const pic = common.picture[0];
+          const base64 = btoa(
+            pic.data.reduce((acc: string, byte: number) => acc + String.fromCharCode(byte), '')
+          );
+          updates.cover_art_url = `data:${pic.format};base64,${base64}`;
+        }
 
         if (Object.keys(updates).length > 0) {
           await onUpdateTrack(track.id, updates);

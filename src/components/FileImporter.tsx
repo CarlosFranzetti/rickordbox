@@ -6,7 +6,7 @@ import type { Track } from '@/lib/database';
 import * as mm from 'music-metadata-browser';
 
 interface FileImporterProps {
-  onImport: (track: Partial<Track>) => Promise<number | void>;
+  onImport: (track: Partial<Track>) => Promise<number>;
   onCreatePlaylist: (name: string) => Promise<number>;
   onAddToPlaylist: (playlistId: number, trackId: number) => Promise<void>;
 }
@@ -187,9 +187,8 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
     setProgress({ current: 0, total: audioFiles.length, phase: 'Reading metadata & importing…' });
     const newResults: ImportResult[] = [];
 
-    // Track file path → imported track ID mapping
-    // We'll collect all imported tracks grouped by folder
-    const _folderTracks = new Map<string, number[]>();
+    // Collect imported tracks grouped by folder
+    const folderTracks = new Map<string, number[]>();
 
     let idx = 0;
     for (const file of audioFiles) {
@@ -201,16 +200,18 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
         const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
         trackData.file_path = filePath;
 
-        await onImport(trackData);
-        newResults.push({ fileName: file.name, status: 'success' });
+        const trackId = await onImport(trackData);
+        newResults.push({ fileName: file.name, status: 'success', trackId: trackId ?? undefined });
 
         // Group by folder for playlist creation
-        const parts = filePath.split('/');
-        if (parts.length >= 2) {
-          const folder = parts.slice(0, -1).join('/');
-          if (selectedFolders.has(folder)) {
-            // We need the track ID. Since addTrack doesn't return it through onImport,
-            // we store the file path and create playlists afterward by looking up tracks
+        if (trackId) {
+          const parts = filePath.split('/');
+          if (parts.length >= 2) {
+            const folder = parts.slice(0, -1).join('/');
+            if (selectedFolders.has(folder)) {
+              if (!folderTracks.has(folder)) folderTracks.set(folder, []);
+              folderTracks.get(folder)!.push(trackId);
+            }
           }
         }
       } catch {
@@ -220,11 +221,30 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
       if (idx % 10 === 0) await new Promise(r => setTimeout(r, 0));
     }
 
+    // Create playlists from selected folders and add tracks
+    if (selectedFolders.size > 0 && folderTracks.size > 0) {
+      setProgress({ current: 0, total: folderTracks.size, phase: 'Creating playlists…' });
+      let plIdx = 0;
+      for (const [folder, trackIds] of folderTracks) {
+        plIdx++;
+        const folderName = folder.split('/').pop() || folder;
+        setProgress({ current: plIdx, total: folderTracks.size, phase: `Playlist: ${folderName}` });
+        try {
+          const playlistId = await _createPlaylist(folderName);
+          for (const tid of trackIds) {
+            await _addToPlaylist(playlistId, tid);
+          }
+        } catch {
+          // Playlist creation failed silently
+        }
+      }
+    }
+
     setResults(newResults);
     setImporting(false);
     setPendingFiles(null);
     setPendingBasePaths(null);
-  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, parseMetadata]);
+  }, [pendingFiles, pendingBasePaths, selectedFolders, onImport, parseMetadata, _createPlaylist, _addToPlaylist]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {

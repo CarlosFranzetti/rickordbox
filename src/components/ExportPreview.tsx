@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HardDrive, FolderTree, FileAudio, ListMusic, ChevronRight, Download } from 'lucide-react';
+import { HardDrive, FolderTree, FileAudio, ListMusic, ChevronRight, Download, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Playlist, ExportManifest } from '@/lib/database';
@@ -43,11 +43,22 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
       <div>
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
           <HardDrive className="w-5 h-5 text-primary" />
-          USB Export Preview
+          USB Export
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Select playlists to preview the Pioneer-compatible USB folder structure.
+          Export copies your tracks to the USB in the proper Pioneer folder structure and generates the hardware-readable database (export.pdb).
         </p>
+      </div>
+
+      {/* How it works */}
+      <div className="bg-card border border-border rounded-lg p-4 space-y-2 text-xs text-muted-foreground">
+        <p className="text-foreground font-medium text-sm">How export works</p>
+        <ul className="space-y-1 list-disc pl-4">
+          <li>Original files are <span className="text-primary">copied</span> to the USB — never moved or deleted</li>
+          <li>Tracks are organized into <span className="font-mono text-foreground">/Contents/00001/track.mp3</span> structure</li>
+          <li>A Pioneer-compatible <span className="font-mono text-foreground">export.pdb</span> database is generated for CDJ hardware</li>
+          <li>Playlist order and metadata (BPM, key, etc.) are preserved</li>
+        </ul>
       </div>
 
       {/* Playlist Selection */}
@@ -108,7 +119,7 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
           {/* File mapping */}
           <div className="space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              File Mapping
+              File Mapping (copies)
             </p>
             {manifest.files.slice(0, 20).map((f, i) => (
               <div key={i} className="flex items-center gap-2 text-xs py-0.5">
@@ -136,9 +147,13 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
             ))}
           </div>
 
-          <p className="text-[10px] text-muted-foreground border-t border-border pt-3">
-            ⚠ This is a preview. Actual export.pdb generation requires the Python backend (pyrekordbox).
-          </p>
+          <div className="flex items-start gap-2 text-[10px] text-muted-foreground border-t border-border pt-3">
+            <AlertTriangle className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+            <span>
+              Full USB export with file copying and PDB generation requires the File System Access API or a local backend. 
+              The preview shows the exact structure that will be written to your USB drive.
+            </span>
+          </div>
         </div>
       )}
     </div>

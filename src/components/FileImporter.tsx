@@ -162,10 +162,15 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
     // Extract embedded cover art
     if (common.picture?.length) {
       const pic = common.picture[0];
-      const base64 = btoa(
-        pic.data.reduce((acc: string, byte: number) => acc + String.fromCharCode(byte), '')
-      );
-      coverArtUrl = `data:${pic.format};base64,${base64}`;
+      const chunkSize = 8192;
+      const parts: string[] = [];
+      for (let i = 0; i < pic.data.length; i += chunkSize) {
+        const chunk = pic.data.subarray(i, Math.min(i + chunkSize, pic.data.length));
+        let bin = '';
+        for (let j = 0; j < chunk.length; j++) bin += String.fromCharCode(chunk[j]);
+        parts.push(bin);
+      }
+      coverArtUrl = `data:${pic.format};base64,${btoa(parts.join(''))}`;
     }
   } catch (err) {
     console.warn('Metadata parse failed for', file.name, err);

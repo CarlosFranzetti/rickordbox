@@ -115,10 +115,15 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
         // Extract embedded cover art
         if (common.picture?.length && !track.cover_art_url) {
           const pic = common.picture[0];
-          const base64 = btoa(
-            pic.data.reduce((acc: string, byte: number) => acc + String.fromCharCode(byte), '')
-          );
-          updates.cover_art_url = `data:${pic.format};base64,${base64}`;
+          const chunkSize = 8192;
+          const parts: string[] = [];
+          for (let i = 0; i < pic.data.length; i += chunkSize) {
+            const chunk = pic.data.subarray(i, Math.min(i + chunkSize, pic.data.length));
+            let bin = '';
+            for (let j = 0; j < chunk.length; j++) bin += String.fromCharCode(chunk[j]);
+            parts.push(bin);
+          }
+          updates.cover_art_url = `data:${pic.format};base64,${btoa(parts.join(''))}`;
         }
 
         if (Object.keys(updates).length > 0) {

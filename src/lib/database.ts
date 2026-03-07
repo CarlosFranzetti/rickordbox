@@ -227,8 +227,8 @@ export async function addTrack(track: Partial<Track>): Promise<number> {
   }
 
   db.run(
-    `INSERT INTO tracks (title, artist, album, genre, bpm, key, duration, bitrate, sample_rate, file_name, file_path, file_size, file_hash, year, comment)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tracks (title, artist, album, genre, bpm, key, duration, bitrate, sample_rate, file_name, file_path, file_size, file_hash, year, comment, label, cover_art_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       track.title || 'Unknown',
       track.artist || 'Unknown',
@@ -245,6 +245,8 @@ export async function addTrack(track: Partial<Track>): Promise<number> {
       track.file_hash || '',
       track.year || 0,
       track.comment || '',
+      track.label || '',
+      track.cover_art_url || '',
     ]
   );
   // Don't save after every single track - batch saves happen after import

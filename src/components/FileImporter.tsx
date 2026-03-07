@@ -132,11 +132,14 @@ export function FileImporter({ onImport, onCreatePlaylist, onAddToPlaylist }: Fi
           const filePath = basePaths?.get(file) || (file as any).webkitRelativePath || file.name;
           trackData.file_path = filePath;
 
+          console.log('Importing track:', file.name, '→', { title: trackData.title, artist: trackData.artist, album: trackData.album, bpm: trackData.bpm, key: trackData.key, genre: trackData.genre, duration: trackData.duration });
+
           // Import to DB — onImport returns void but the track gets added
           await onImport(trackData);
 
           newResults.push({ fileName: file.name, status: 'success' });
-        } catch {
+        } catch (err) {
+          console.error('Import failed for', file.name, err);
           newResults.push({ fileName: file.name, status: 'error', message: 'Import failed' });
         }
 

@@ -168,6 +168,7 @@ export interface Track {
   file_size: number;
   file_hash: string;
   cover_art_url: string;
+  label: string;
   date_added: string;
   year: number;
   comment: string;

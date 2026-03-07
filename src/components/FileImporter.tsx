@@ -201,7 +201,7 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
   };
 }
 
-export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onAddToPlaylist }: FileImporterProps) {
+export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onAddToPlaylist, onRegisterFiles }: FileImporterProps) {
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<ImportResult[]>([]);

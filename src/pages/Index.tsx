@@ -64,6 +64,7 @@ const Index = () => {
         trackCount={db.tracks.length}
         onOpenSettings={() => setShowSettings(true)}
         footerSlot={<DatabaseTools onBackup={db.backup} onRestore={db.restore} />}
+        getPlaylistTracks={db.getPlaylistTracks}
       />
 
       <main className="flex-1 flex flex-col min-w-0">

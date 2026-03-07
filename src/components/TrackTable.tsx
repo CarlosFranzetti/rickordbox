@@ -141,6 +141,7 @@ export function TrackTable({
 
   const hasActiveFilters = searchQuery || filterKey || bpmMin || bpmMax;
   const canReorder = allowReorder && onReorderTracks && !hasActiveFilters;
+  const selectedTrack = tracks.find((track) => track.id === selectedId) || null;
 
   const clearFilters = () => {
     setSearchQuery('');

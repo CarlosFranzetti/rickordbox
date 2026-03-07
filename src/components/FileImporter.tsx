@@ -141,7 +141,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
 
       // Save database once after all imports
       saveDatabase();
-
+      await onImportComplete?.();
       setResults(newResults);
       setImporting(false);
       setPendingFiles(null);

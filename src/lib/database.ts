@@ -188,6 +188,35 @@ export async function getAllTracks(): Promise<Track[]> {
 
 export async function addTrack(track: Partial<Track>): Promise<number> {
   const db = await getDatabase();
+
+  // Duplicate check by file_path
+  if (track.file_path) {
+    const existing = db.exec('SELECT id FROM tracks WHERE file_path = ?', [track.file_path]);
+    if (existing.length > 0 && existing[0].values.length > 0) {
+      const existingId = existing[0].values[0][0] as number;
+      // Update existing track with any new non-empty metadata
+      const updates: Partial<Track> = {};
+      if (track.title && track.title !== 'Unknown') updates.title = track.title;
+      if (track.artist && track.artist !== 'Unknown') updates.artist = track.artist;
+      if (track.album) updates.album = track.album;
+      if (track.genre) updates.genre = track.genre;
+      if (track.bpm) updates.bpm = track.bpm;
+      if (track.key) updates.key = track.key;
+      if (track.duration) updates.duration = track.duration;
+      if (track.bitrate) updates.bitrate = track.bitrate;
+      if (track.sample_rate) updates.sample_rate = track.sample_rate;
+      if (track.year) updates.year = track.year;
+      if (track.comment) updates.comment = track.comment;
+      if (track.file_size) updates.file_size = track.file_size;
+      if (Object.keys(updates).length > 0) {
+        const fields = Object.keys(updates).map((k) => `${k} = ?`);
+        const values = Object.keys(updates).map((k) => (updates as any)[k]);
+        db.run(`UPDATE tracks SET ${fields.join(', ')} WHERE id = ?`, [...values, existingId]);
+      }
+      return existingId;
+    }
+  }
+
   db.run(
     `INSERT INTO tracks (title, artist, album, genre, bpm, key, duration, bitrate, sample_rate, file_name, file_path, file_size, file_hash, year, comment)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -335,6 +335,9 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
 
   const handleFilesReceived = useCallback(
     (files: File[], basePaths?: Map<File, string>) => {
+      // Register files for audio playback
+      onRegisterFiles?.(files.filter(f => isAudioFile(f.name)));
+
       const folders = analyzeFolderStructure(files, basePaths);
 
       if (folders.length > 0) {
@@ -347,7 +350,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
         runImport(files, basePaths);
       }
     },
-    [runImport]
+    [runImport, onRegisterFiles]
   );
 
   const handleImportWithPlaylists = useCallback(

@@ -65,7 +65,7 @@ function PlaylistNode({
   onPlaylistSelect: (id: number) => void;
   onDeletePlaylist: (id: number) => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const hasChildren = node.children.length > 0;
   const isActive = node.playlist && activePlaylistId === node.playlist.id;
 

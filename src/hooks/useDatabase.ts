@@ -188,6 +188,7 @@ export function useDatabase() {
     getPlaylistTracks: handleGetPlaylistTracks,
     reorderPlaylistTracks: handleReorderPlaylistTracks,
     generateExport: handleGenerateExport,
+    backup: handleBackup,
     restore: handleRestore,
     restoreFromBackup: handleRestoreFromBackupId,
     clearAll: handleClearAll,

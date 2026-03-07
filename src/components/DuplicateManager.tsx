@@ -181,7 +181,7 @@ export function DuplicateManager({ tracks, onDeleteTrack, onPlayTrack, hasFileHa
                   </div>
                 ))}
               </div>
-            ))
+            ))}
           </div>
         </DialogContent>
       </Dialog>

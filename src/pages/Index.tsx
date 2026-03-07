@@ -135,6 +135,7 @@ const Index = () => {
         onRestoreBackup={db.restoreFromBackup}
         tracks={db.tracks}
         onRefresh={db.refresh}
+        onUpdateTrack={db.updateTrack}
       />
     </div>
   );

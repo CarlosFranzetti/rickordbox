@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Settings, Trash2, Key, Clock, Archive, X, Search, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Settings, Trash2, Key, Clock, Archive, X, Search, Loader2, RefreshCw } from 'lucide-react';
+import * as mm from 'music-metadata-browser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,9 +22,10 @@ interface SettingsPanelProps {
   onRestoreBackup: (id: string) => void;
   tracks: Track[];
   onRefresh: () => void;
+  onUpdateTrack?: (id: number, updates: Partial<Track>) => void;
 }
 
-export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup, tracks, onRefresh }: SettingsPanelProps) {
+export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup, tracks, onRefresh, onUpdateTrack }: SettingsPanelProps) {
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [backups, setBackups] = useState<BackupEntry[]>([]);
@@ -34,6 +36,12 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
   const [scrapeProgress, setScrapeProgress] = useState({ current: 0, total: 0, trackName: '' });
   const [scrapeResult, setScrapeResult] = useState<{ matched: number; failed: number } | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+
+  // Re-scan metadata state
+  const [rescanning, setRescanning] = useState(false);
+  const [rescanProgress, setRescanProgress] = useState({ current: 0, total: 0, fileName: '' });
+  const [rescanResult, setRescanResult] = useState<{ updated: number; skipped: number; failed: number } | null>(null);
+  const rescanInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -52,6 +60,74 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
     onClearAll();
     setShowClearConfirm(false);
     onOpenChange(false);
+  };
+
+  const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'ogg', 'wma'];
+  const isAudioFile = (name: string) => {
+    const ext = name.split('.').pop()?.toLowerCase();
+    return !!ext && AUDIO_EXTS.includes(ext);
+  };
+
+  const handleRescanFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0 || !onUpdateTrack) return;
+    const files = Array.from(e.target.files).filter(f => isAudioFile(f.name));
+    setRescanning(true);
+    setRescanResult(null);
+
+    // Build a lookup from relative path to file
+    const pathToFile = new Map<string, File>();
+    for (const file of files) {
+      const relPath = ((file as any).webkitRelativePath || file.name).replace(/\\/g, '/').replace(/^\/+/, '');
+      pathToFile.set(relPath, file);
+    }
+
+    let updated = 0, skipped = 0, failed = 0;
+    const total = tracks.length;
+
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      setRescanProgress({ current: i + 1, total, fileName: track.file_name });
+
+      const file = pathToFile.get(track.file_path);
+      if (!file) { skipped++; continue; }
+
+      try {
+        const metadata = await mm.parseBlob(file);
+        const { common, format } = metadata;
+        const updates: Partial<Track> = {};
+
+        if (common.title && common.title !== track.title) updates.title = common.title;
+        if (common.artist && common.artist !== track.artist) updates.artist = common.artist;
+        if (common.album && common.album !== track.album) updates.album = common.album;
+        if (common.genre?.length) { const g = common.genre.join(', '); if (g !== track.genre) updates.genre = g; }
+        if (common.bpm && common.bpm !== track.bpm) updates.bpm = common.bpm;
+        if (common.key && common.key !== track.key) updates.key = common.key;
+        if (common.year && common.year !== track.year) updates.year = common.year;
+        if (common.comment?.length) {
+          const c = common.comment.map((x: any) => typeof x === 'string' ? x : x.text || '').join('; ');
+          if (c !== track.comment) updates.comment = c;
+        }
+        if (format.duration && format.duration !== track.duration) updates.duration = format.duration;
+        if (format.bitrate) { const br = Math.round(format.bitrate / 1000); if (br !== track.bitrate) updates.bitrate = br; }
+        if (format.sampleRate && format.sampleRate !== track.sample_rate) updates.sample_rate = format.sampleRate;
+
+        if (Object.keys(updates).length > 0) {
+          await onUpdateTrack(track.id, updates);
+          updated++;
+        } else {
+          skipped++;
+        }
+      } catch {
+        failed++;
+      }
+
+      if (i % 10 === 0) await new Promise(r => setTimeout(r, 0));
+    }
+
+    setRescanResult({ updated, skipped, failed });
+    setRescanning(false);
+    onRefresh();
+    e.target.value = '';
   };
 
   const handleStartScrape = async () => {
@@ -147,6 +223,48 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
                     onChange={(e) => updateSetting('maxBackups', parseInt(e.target.value) || 10)}
                     className="w-20 h-8 text-sm"
                   />
+                </div>
+
+                <div className="border-t border-border pt-4 space-y-3">
+                  <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-muted-foreground" />
+                    Re-scan Metadata
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Re-select your music folder to re-read tags from files and update all matching tracks in the database.
+                  </p>
+                  <input
+                    ref={rescanInputRef}
+                    type="file"
+                    className="hidden"
+                    {...({ webkitdirectory: '', directory: '', multiple: true } as any)}
+                    onChange={handleRescanFolder}
+                  />
+                  {!rescanning && (
+                    <Button size="sm" onClick={() => rescanInputRef.current?.click()} disabled={tracks.length === 0}>
+                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                      Re-scan folder ({tracks.length} tracks)
+                    </Button>
+                  )}
+                  {rescanning && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        <span className="text-sm text-foreground">{rescanProgress.current}/{rescanProgress.total}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{rescanProgress.fileName}</p>
+                      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                        <div className="h-full bg-primary transition-all duration-200" style={{ width: `${(rescanProgress.current / rescanProgress.total) * 100}%` }} />
+                      </div>
+                    </div>
+                  )}
+                  {rescanResult && (
+                    <p className="text-xs text-muted-foreground">
+                      Done: <span className="text-primary">{rescanResult.updated} updated</span>,{' '}
+                      {rescanResult.skipped} unchanged,{' '}
+                      <span className="text-destructive">{rescanResult.failed} failed</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="border-t border-border pt-4">

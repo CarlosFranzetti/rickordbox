@@ -52,7 +52,7 @@ const Index = () => {
         activePlaylistId={activePlaylistId}
         onViewChange={handleViewChange}
         onPlaylistSelect={handlePlaylistSelect}
-        onCreatePlaylist={handleCreatePlaylist}
+        onCreatePlaylist={() => setShowCreatePlaylist(true)}
         onDeletePlaylist={db.deletePlaylist}
         trackCount={db.tracks.length}
       />

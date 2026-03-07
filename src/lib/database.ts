@@ -59,6 +59,7 @@ export async function getDatabase(): Promise<Database> {
       file_size INTEGER DEFAULT 0,
       file_hash TEXT DEFAULT '',
       cover_art_url TEXT DEFAULT '',
+      label TEXT DEFAULT '',
       date_added TEXT DEFAULT (datetime('now')),
       year INTEGER DEFAULT 0,
       comment TEXT DEFAULT '',

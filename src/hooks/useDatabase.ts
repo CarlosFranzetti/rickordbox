@@ -7,6 +7,7 @@ import {
   deleteTrack,
   updateTrack,
   createPlaylist,
+  createPlaylistFast,
   deletePlaylist,
   addTrackToPlaylist,
   removeTrackFromPlaylist,
@@ -109,6 +110,11 @@ export function useDatabase() {
     await refresh();
   }, [refresh]);
 
+  const handleCreatePlaylistFast = useCallback(async (name: string) => {
+    const id = await createPlaylistFast(name);
+    return id;
+  }, []);
+
   const handleCreatePlaylist = useCallback(async (name: string) => {
     const id = await createPlaylist(name);
     await refresh();
@@ -119,6 +125,10 @@ export function useDatabase() {
     await deletePlaylist(id);
     await refresh();
   }, [refresh]);
+
+  const handleAddToPlaylistFast = useCallback(async (playlistId: number, trackId: number) => {
+    await addTrackToPlaylist(playlistId, trackId);
+  }, []);
 
   const handleAddToPlaylist = useCallback(async (playlistId: number, trackId: number) => {
     await addTrackToPlaylist(playlistId, trackId);
@@ -182,8 +192,10 @@ export function useDatabase() {
     deleteTrack: handleDeleteTrack,
     updateTrack: handleUpdateTrack,
     createPlaylist: handleCreatePlaylist,
+    createPlaylistFast: handleCreatePlaylistFast,
     deletePlaylist: handleDeletePlaylist,
     addToPlaylist: handleAddToPlaylist,
+    addToPlaylistFast: handleAddToPlaylistFast,
     removeFromPlaylist: handleRemoveFromPlaylist,
     getPlaylistTracks: handleGetPlaylistTracks,
     reorderPlaylistTracks: handleReorderPlaylistTracks,

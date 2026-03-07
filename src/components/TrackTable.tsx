@@ -269,7 +269,7 @@ export function TrackTable({
             }}
             onDragEnd={handleDragEnd}
             className={`track-row grid gap-2 px-4 py-2 text-sm items-center ${
-              canReorder ? 'grid-cols-[24px_2fr_1.5fr_1fr_80px_60px_40px]' : 'grid-cols-[2fr_1.5fr_1fr_80px_60px_40px]'
+              canReorder ? 'grid-cols-[24px_2fr_1.5fr_1fr_0.8fr_80px_60px_40px]' : 'grid-cols-[2fr_1.5fr_1fr_0.8fr_80px_60px_40px]'
             } ${selectedId === track.id ? 'track-row-selected' : ''} ${
               dragIdx !== null && overIdx === idx && dragIdx !== idx ? 'border-t-2 !border-t-primary' : ''
             }`}
@@ -300,6 +300,7 @@ export function TrackTable({
               )}
             </div>
             <span className="truncate text-muted-foreground text-xs">{track.album}</span>
+            <span className="truncate text-muted-foreground text-xs">{track.genre || '—'}</span>
             <div className="flex gap-1">
               {onUpdateTrack ? (
                 <>

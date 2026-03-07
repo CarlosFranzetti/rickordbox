@@ -22,9 +22,10 @@ interface SettingsPanelProps {
   onRestoreBackup: (id: string) => void;
   tracks: Track[];
   onRefresh: () => void;
+  onUpdateTrack?: (id: number, updates: Partial<Track>) => void;
 }
 
-export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup, tracks, onRefresh }: SettingsPanelProps) {
+export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup, tracks, onRefresh, onUpdateTrack }: SettingsPanelProps) {
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [backups, setBackups] = useState<BackupEntry[]>([]);

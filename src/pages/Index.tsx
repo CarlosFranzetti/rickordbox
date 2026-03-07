@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useDatabase } from '@/hooks/useDatabase';
 import { AppSidebar } from '@/components/AppSidebar';
 import { TrackTable } from '@/components/TrackTable';

@@ -133,8 +133,17 @@ export function saveDatabase() {
   if (!db) return;
   try {
     const data = db.export();
-    const b64 = uint8ArrayToBase64(data);
-    localStorage.setItem(DB_STORAGE_KEY, b64);
+
+    // Primary persistence: IndexedDB
+    void idbSet(DB_STORAGE_KEY, data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)).catch((e) => {
+      console.warn('Failed to save database to IndexedDB:', e);
+    });
+
+    // Secondary/legacy persistence: localStorage (skip if too large)
+    if (data.byteLength <= 3_000_000) {
+      const b64 = uint8ArrayToBase64(data);
+      localStorage.setItem(DB_STORAGE_KEY, b64);
+    }
   } catch (e) {
     console.error('Failed to save database:', e);
   }

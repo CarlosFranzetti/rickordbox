@@ -183,6 +183,14 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
         coverArtUrl = `data:${pic.format};base64,${btoa(parts.join(''))}`;
       }
     }
+  } catch (err) {
+    console.warn('Metadata parse failed for', file.name, err);
+    const dashSplit = title.split(' - ');
+    if (dashSplit.length >= 2) {
+      artist = dashSplit[0].trim();
+      title = dashSplit.slice(1).join(' - ').trim();
+    }
+  }
 
   return {
     title,

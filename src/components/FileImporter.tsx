@@ -103,13 +103,19 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
 
 function createPreScanBackup(): ScanBackupSnapshot | null {
   try {
+    const trackCount = getTrackCount();
+    const playlistCount = getPlaylistCount();
+
+    // Avoid huge base64 snapshots (can exceed storage / crash the tab on large collections)
+    if (trackCount > 2000) return null;
+
     const b64 = exportDatabaseBase64();
     const timestamp = new Date().toISOString();
     const entry: ScanBackupSnapshot = {
       id: `scan-${Date.now()}`,
       timestamp,
-      trackCount: getTrackCount(),
-      playlistCount: getPlaylistCount(),
+      trackCount,
+      playlistCount,
       data: b64,
     };
 
@@ -160,18 +166,22 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
     if (format.bitrate) bitrate = Math.round(format.bitrate / 1000);
     if (format.sampleRate) sampleRate = format.sampleRate;
 
-    // Extract embedded cover art
+    // Extract embedded cover art (skip very large art to avoid crashes / huge DB)
     if (common.picture?.length) {
       const pic = common.picture[0];
-      const chunkSize = 8192;
-      const parts: string[] = [];
-      for (let i = 0; i < pic.data.length; i += chunkSize) {
-        const chunk = pic.data.subarray(i, Math.min(i + chunkSize, pic.data.length));
-        let bin = '';
-        for (let j = 0; j < chunk.length; j++) bin += String.fromCharCode(chunk[j]);
-        parts.push(bin);
+      const MAX_COVER_ART_BYTES = 600_000; // ~600KB
+
+      if (pic.data.length <= MAX_COVER_ART_BYTES) {
+        const chunkSize = 8192;
+        const parts: string[] = [];
+        for (let i = 0; i < pic.data.length; i += chunkSize) {
+          const chunk = pic.data.subarray(i, Math.min(i + chunkSize, pic.data.length));
+          let bin = '';
+          for (let j = 0; j < chunk.length; j++) bin += String.fromCharCode(chunk[j]);
+          parts.push(bin);
+        }
+        coverArtUrl = `data:${pic.format};base64,${btoa(parts.join(''))}`;
       }
-      coverArtUrl = `data:${pic.format};base64,${btoa(parts.join(''))}`;
     }
   } catch (err) {
     console.warn('Metadata parse failed for', file.name, err);
@@ -429,7 +439,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       <div>
         <h2 className="text-lg font-semibold text-foreground">Import Audio Files</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Scan files or folders to add to your collection. Metadata is read from tags and a pre-scan backup is created automatically.
+          Scan files or folders to add to your collection. Safety checkpoints are saved during scanning to survive crashes.
         </p>
       </div>
 

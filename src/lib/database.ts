@@ -29,18 +29,40 @@ export async function getDatabase(): Promise<Database> {
     locateFile: () => '/sql-wasm.wasm',
   });
 
+  // Prefer IndexedDB (handles large collections more reliably than localStorage)
   try {
-    const saved = localStorage.getItem(DB_STORAGE_KEY);
-    if (saved) {
-      const buf = Uint8Array.from(atob(saved), (c) => c.charCodeAt(0));
-      db = new SQL.Database(buf);
-    } else {
-      db = new SQL.Database();
+    const idbBuf = await idbGet(DB_STORAGE_KEY);
+    if (idbBuf && idbBuf.byteLength > 0) {
+      db = new SQL.Database(new Uint8Array(idbBuf));
     }
   } catch (e) {
-    console.warn('Failed to restore DB from localStorage, creating fresh:', e);
-    localStorage.removeItem(DB_STORAGE_KEY);
-    db = new SQL.Database();
+    console.warn('Failed to restore DB from IndexedDB, falling back:', e);
+  }
+
+  // Fallback: localStorage (legacy / small DBs)
+  if (!db) {
+    try {
+      const saved = localStorage.getItem(DB_STORAGE_KEY);
+      if (saved) {
+        const bin = atob(saved);
+        const buf = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+        db = new SQL.Database(buf);
+      } else {
+        db = new SQL.Database();
+      }
+    } catch (e) {
+      console.warn(
+        'Failed to restore DB from localStorage, creating fresh (data preserved for recovery):',
+        e
+      );
+      // IMPORTANT: don't delete the user's last DB on restore failure
+      try {
+        const saved = localStorage.getItem(DB_STORAGE_KEY);
+        if (saved) localStorage.setItem(`${DB_STORAGE_KEY}-recovery-${Date.now()}`, saved);
+      } catch {}
+      db = new SQL.Database();
+    }
   }
 
   db.run(`

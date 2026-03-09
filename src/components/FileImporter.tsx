@@ -435,7 +435,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       <div>
         <h2 className="text-lg font-semibold text-foreground">Import Audio Files</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Scan files or folders to add to your collection. Metadata is read from tags and a pre-scan backup is created automatically.
+          Scan files or folders to add to your collection. Safety checkpoints are saved during scanning to survive crashes.
         </p>
       </div>
 

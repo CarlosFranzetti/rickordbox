@@ -65,8 +65,14 @@
     @apply border-border;
   }
 
+  html {
+    background-color: hsl(var(--background));
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
     font-family: 'Inter', sans-serif;
   }
 

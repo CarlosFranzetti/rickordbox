@@ -166,27 +166,23 @@ async function parseMetadata(file: File): Promise<Partial<Track>> {
     if (format.bitrate) bitrate = Math.round(format.bitrate / 1000);
     if (format.sampleRate) sampleRate = format.sampleRate;
 
-    // Extract embedded cover art
+    // Extract embedded cover art (skip very large art to avoid crashes / huge DB)
     if (common.picture?.length) {
       const pic = common.picture[0];
-      const chunkSize = 8192;
-      const parts: string[] = [];
-      for (let i = 0; i < pic.data.length; i += chunkSize) {
-        const chunk = pic.data.subarray(i, Math.min(i + chunkSize, pic.data.length));
-        let bin = '';
-        for (let j = 0; j < chunk.length; j++) bin += String.fromCharCode(chunk[j]);
-        parts.push(bin);
+      const MAX_COVER_ART_BYTES = 600_000; // ~600KB
+
+      if (pic.data.length <= MAX_COVER_ART_BYTES) {
+        const chunkSize = 8192;
+        const parts: string[] = [];
+        for (let i = 0; i < pic.data.length; i += chunkSize) {
+          const chunk = pic.data.subarray(i, Math.min(i + chunkSize, pic.data.length));
+          let bin = '';
+          for (let j = 0; j < chunk.length; j++) bin += String.fromCharCode(chunk[j]);
+          parts.push(bin);
+        }
+        coverArtUrl = `data:${pic.format};base64,${btoa(parts.join(''))}`;
       }
-      coverArtUrl = `data:${pic.format};base64,${btoa(parts.join(''))}`;
     }
-  } catch (err) {
-    console.warn('Metadata parse failed for', file.name, err);
-    const dashSplit = title.split(' - ');
-    if (dashSplit.length >= 2) {
-      artist = dashSplit[0].trim();
-      title = dashSplit.slice(1).join(' - ').trim();
-    }
-  }
 
   return {
     title,

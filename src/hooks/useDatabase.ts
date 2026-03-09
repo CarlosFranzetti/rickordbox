@@ -17,7 +17,7 @@ import {
   exportDatabaseFile,
   exportDatabaseBase64,
   restoreDatabase,
-  
+  saveDatabase,
   clearAllData,
   getTrackCount,
   getPlaylistCount,
@@ -51,6 +51,12 @@ export function useDatabase() {
 
       autoSaveRef.current = setInterval(() => {
         try {
+          // Large collections: checkpoint to IndexedDB instead of writing huge base64 backups
+          if (getTrackCount() > 2000) {
+            saveDatabase();
+            return;
+          }
+
           const b64 = exportDatabaseBase64();
           const entry = {
             id: `auto-${Date.now()}`,
@@ -62,7 +68,10 @@ export function useDatabase() {
           const currentSettings = loadSettings();
           saveBackupEntry(entry, currentSettings.maxBackups);
         } catch {
-          // Auto-save failed silently
+          // Fallback to a simple persistence checkpoint
+          try {
+            saveDatabase();
+          } catch {}
         }
       }, intervalMs);
     };
@@ -94,60 +103,84 @@ export function useDatabase() {
     return id;
   }, []);
 
-  const handleAddTrack = useCallback(async (track: Partial<Track>) => {
-    const id = await handleAddTrackFast(track);
-    await refresh();
-    return id;
-  }, [handleAddTrackFast, refresh]);
+  const handleAddTrack = useCallback(
+    async (track: Partial<Track>) => {
+      const id = await handleAddTrackFast(track);
+      await refresh();
+      return id;
+    },
+    [handleAddTrackFast, refresh]
+  );
 
-  const handleDeleteTrack = useCallback(async (id: number) => {
-    await deleteTrack(id);
-    await refresh();
-  }, [refresh]);
+  const handleDeleteTrack = useCallback(
+    async (id: number) => {
+      await deleteTrack(id);
+      await refresh();
+    },
+    [refresh]
+  );
 
-  const handleUpdateTrack = useCallback(async (id: number, updates: Partial<Track>) => {
-    await updateTrack(id, updates);
-    await refresh();
-  }, [refresh]);
+  const handleUpdateTrack = useCallback(
+    async (id: number, updates: Partial<Track>) => {
+      await updateTrack(id, updates);
+      await refresh();
+    },
+    [refresh]
+  );
 
   const handleCreatePlaylistFast = useCallback(async (name: string) => {
     const id = await createPlaylistFast(name);
     return id;
   }, []);
 
-  const handleCreatePlaylist = useCallback(async (name: string) => {
-    const id = await createPlaylist(name);
-    await refresh();
-    return id;
-  }, [refresh]);
+  const handleCreatePlaylist = useCallback(
+    async (name: string) => {
+      const id = await createPlaylist(name);
+      await refresh();
+      return id;
+    },
+    [refresh]
+  );
 
-  const handleDeletePlaylist = useCallback(async (id: number) => {
-    await deletePlaylist(id);
-    await refresh();
-  }, [refresh]);
+  const handleDeletePlaylist = useCallback(
+    async (id: number) => {
+      await deletePlaylist(id);
+      await refresh();
+    },
+    [refresh]
+  );
 
   const handleAddToPlaylistFast = useCallback(async (playlistId: number, trackId: number) => {
     await addTrackToPlaylist(playlistId, trackId);
   }, []);
 
-  const handleAddToPlaylist = useCallback(async (playlistId: number, trackId: number) => {
-    await addTrackToPlaylist(playlistId, trackId);
-    await refresh();
-  }, [refresh]);
+  const handleAddToPlaylist = useCallback(
+    async (playlistId: number, trackId: number) => {
+      await addTrackToPlaylist(playlistId, trackId);
+      await refresh();
+    },
+    [refresh]
+  );
 
-  const handleRemoveFromPlaylist = useCallback(async (playlistId: number, trackId: number) => {
-    await removeTrackFromPlaylist(playlistId, trackId);
-    await refresh();
-  }, [refresh]);
+  const handleRemoveFromPlaylist = useCallback(
+    async (playlistId: number, trackId: number) => {
+      await removeTrackFromPlaylist(playlistId, trackId);
+      await refresh();
+    },
+    [refresh]
+  );
 
   const handleGetPlaylistTracks = useCallback(async (playlistId: number) => {
     return getPlaylistTracks(playlistId);
   }, []);
 
-  const handleReorderPlaylistTracks = useCallback(async (playlistId: number, trackIds: number[]) => {
-    await reorderPlaylistTracks(playlistId, trackIds);
-    await refresh();
-  }, [refresh]);
+  const handleReorderPlaylistTracks = useCallback(
+    async (playlistId: number, trackIds: number[]) => {
+      await reorderPlaylistTracks(playlistId, trackIds);
+      await refresh();
+    },
+    [refresh]
+  );
 
   const handleGenerateExport = useCallback(async (playlistIds: number[]) => {
     return generateExportManifest(playlistIds);
@@ -164,22 +197,31 @@ export function useDatabase() {
     URL.revokeObjectURL(url);
   }, []);
 
-  const handleRestore = useCallback(async (data: Uint8Array) => {
-    await restoreDatabase(data);
-    await refresh();
-  }, [refresh]);
+  const handleRestore = useCallback(
+    async (data: Uint8Array) => {
+      await restoreDatabase(data);
+      await refresh();
+    },
+    [refresh]
+  );
 
-  const handleRestoreFromBackupId = useCallback(async (id: string) => {
-    const data = getBackupData(id);
-    if (!data) throw new Error('Backup not found');
-    await restoreDatabase(data);
-    await refresh();
-  }, [refresh]);
+  const handleRestoreFromBackupId = useCallback(
+    async (id: string) => {
+      const data = getBackupData(id);
+      if (!data) throw new Error('Backup not found');
+      await restoreDatabase(data);
+      await refresh();
+    },
+    [refresh]
+  );
 
-  const handleClearAll = useCallback(async () => {
-    await clearAllData();
-    await refresh();
-  }, [refresh]);
+  const handleClearAll = useCallback(
+    async () => {
+      await clearAllData();
+      await refresh();
+    },
+    [refresh]
+  );
 
   return {
     ready,

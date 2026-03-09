@@ -103,13 +103,19 @@ function analyzeFolderStructure(files: File[], basePaths?: Map<File, string>): F
 
 function createPreScanBackup(): ScanBackupSnapshot | null {
   try {
+    const trackCount = getTrackCount();
+    const playlistCount = getPlaylistCount();
+
+    // Avoid huge base64 snapshots (can exceed storage / crash the tab on large collections)
+    if (trackCount > 2000) return null;
+
     const b64 = exportDatabaseBase64();
     const timestamp = new Date().toISOString();
     const entry: ScanBackupSnapshot = {
       id: `scan-${Date.now()}`,
       timestamp,
-      trackCount: getTrackCount(),
-      playlistCount: getPlaylistCount(),
+      trackCount,
+      playlistCount,
       data: b64,
     };
 

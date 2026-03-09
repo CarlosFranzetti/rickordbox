@@ -1,4 +1,5 @@
 import initSqlJs, { Database } from 'sql.js';
+import { idbGet, idbSet } from '@/lib/idb';
 
 let db: Database | null = null;
 

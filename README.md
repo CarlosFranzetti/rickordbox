@@ -1,73 +1,103 @@
-# Welcome to your Lovable project
+# 🎵 rickordbox
 
-## Project info
+> **A browser-based music library manager and DJ tool — your tracks, your playlists, your way.**
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?style=flat-square&logo=tailwindcss)
+![SQLite](https://img.shields.io/badge/SQLite-WASM-003B57?style=flat-square&logo=sqlite)
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## 🚀 What is rickordbox?
 
-**Use Lovable**
+**rickordbox** is an open-source, browser-based music collection manager inspired by professional DJ tools. It lets you:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- 🎧 **Import & play** audio files directly in your browser
+- 📁 **Organise** your tracks into playlists and nested folders
+- 🔍 **Search & browse** your full collection at a glance
+- ✏️ **Edit metadata** for individual tracks
+- 🔄 **Detect and remove duplicates** in your library
+- 📤 **Export playlists** for use in other DJ software
+- 💾 **Backup & restore** your entire library database
 
-Changes made via Lovable will be committed automatically to this repo.
+All data stays local — no server, no cloud, no sign-up required.
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🛠️ Tech Stack
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+| Layer | Technology |
+|-------|-----------|
+| ⚡ Build tool | [Vite](https://vitejs.dev/) |
+| 🟦 Language | [TypeScript](https://www.typescriptlang.org/) |
+| ⚛️ UI Framework | [React 18](https://react.dev/) |
+| 🎨 Component Library | [shadcn/ui](https://ui.shadcn.com/) |
+| 💨 Styling | [Tailwind CSS](https://tailwindcss.com/) |
+| 🗃️ Database | [sql.js](https://sql.js.org/) (SQLite in WASM) |
+| 🎵 Audio Metadata | [music-metadata-browser](https://github.com/Borewit/music-metadata-browser) |
 
-Follow these steps:
+---
+
+## ⚙️ Getting Started
+
+The only requirement is **Node.js & npm** — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# 1️⃣  Clone the repository
+git clone https://github.com/CarlosFranzetti/rickordbox.git
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# 2️⃣  Navigate into the project
+cd rickordbox
 
-# Step 3: Install the necessary dependencies.
-npm i
+# 3️⃣  Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# 4️⃣  Start the dev server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Then open **http://localhost:5173** in your browser. 🎉
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## 📦 Available Scripts
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | 🔥 Start development server |
+| `npm run build` | 🏗️ Build for production |
+| `npm run preview` | 👁️ Preview the production build |
+| `npm run lint` | 🔎 Run ESLint |
+| `npm test` | 🧪 Run tests with Vitest |
 
-## What technologies are used for this project?
+---
 
-This project is built with:
+## 🌐 Editing the Code
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+**Preferred IDE (local)**
 
-## How can I deploy this project?
+Clone the repo, make changes in your editor of choice, and push back to GitHub.
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+**GitHub Web Editor**
 
-## Can I connect a custom domain to my Lovable project?
+1. Navigate to the desired file.
+2. Click the **✏️ Edit** (pencil) button at the top right.
+3. Commit your changes directly from the browser.
 
-Yes, you can!
+**GitHub Codespaces**
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+1. Click the green **Code** button on the repository page.
+2. Select the **Codespaces** tab.
+3. Click **New codespace** — your full dev environment spins up instantly.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+---
+
+## 🤝 Contributing
+
+Pull requests are welcome! Feel free to open an issue to discuss what you'd like to change.
+
+---
+
+*Built with ❤️ for music lovers and DJs everywhere.*

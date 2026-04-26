@@ -68,7 +68,7 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Target Device</p>
         <div className="grid gap-2">
-          {(Object.values(DEVICE_PROFILES) as typeof DEVICE_PROFILES[DeviceProfile][]).map((profile) => (
+          {(Object.values(DEVICE_PROFILES) as Array<DeviceProfileConfig>).map((profile) => (
             <label
               key={profile.id}
               className={`flex items-start gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors ${

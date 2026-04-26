@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Trash2, Key, Clock, Archive, X, Search, Loader2, RefreshCw } from 'lucide-react';
+import { Settings, Trash2, Key, Clock, Archive, X, Search, Loader2, RefreshCw, ShieldAlert, FileWarning } from 'lucide-react';
 import * as mm from 'music-metadata-browser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +29,7 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [backups, setBackups] = useState<BackupEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<'general' | 'discogs' | 'backups'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'discogs' | 'backups' | 'health'>('general');
 
   // Discogs scraping state
   const [scraping, setScraping] = useState(false);
@@ -173,6 +173,7 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
     { id: 'general' as const, label: 'General' },
     { id: 'discogs' as const, label: 'Discogs' },
     { id: 'backups' as const, label: 'Backups' },
+    { id: 'health' as const, label: 'Library Health' },
   ];
 
   return (
@@ -394,6 +395,98 @@ export function SettingsPanel({ open, onOpenChange, onClearAll, onRestoreBackup,
                 ))}
               </div>
             )}
+
+            {/* Library Health Tab */}
+            {activeTab === 'health' && (() => {
+              const CDJ_COMPATIBLE = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'aac'];
+              const CDJ_INCOMPATIBLE = ['ogg', 'wma', 'opus'];
+
+              const incompatibleTracks = tracks.filter(t => {
+                const ext = t.file_name.split('.').pop()?.toLowerCase() || '';
+                return CDJ_INCOMPATIBLE.includes(ext);
+              });
+
+              const unknownFormatTracks = tracks.filter(t => {
+                const ext = t.file_name.split('.').pop()?.toLowerCase() || '';
+                return !CDJ_COMPATIBLE.includes(ext) && !CDJ_INCOMPATIBLE.includes(ext);
+              });
+
+              const missingMetaTracks = tracks.filter(t => t.title === 'Unknown' || t.artist === 'Unknown');
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-primary" />
+                    <p className="text-sm font-medium text-foreground">Library Health Report</p>
+                  </div>
+
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-card border border-border rounded-md p-2 text-center">
+                      <p className="text-lg font-bold text-primary">{tracks.length}</p>
+                      <p className="text-[10px] text-muted-foreground">Total tracks</p>
+                    </div>
+                    <div className={`bg-card border rounded-md p-2 text-center ${incompatibleTracks.length > 0 ? 'border-accent/40' : 'border-border'}`}>
+                      <p className={`text-lg font-bold ${incompatibleTracks.length > 0 ? 'text-accent' : 'text-primary'}`}>{incompatibleTracks.length}</p>
+                      <p className="text-[10px] text-muted-foreground">CDJ incompatible</p>
+                    </div>
+                    <div className={`bg-card border rounded-md p-2 text-center ${missingMetaTracks.length > 0 ? 'border-muted' : 'border-border'}`}>
+                      <p className={`text-lg font-bold ${missingMetaTracks.length > 0 ? 'text-muted-foreground' : 'text-primary'}`}>{missingMetaTracks.length}</p>
+                      <p className="text-[10px] text-muted-foreground">Missing metadata</p>
+                    </div>
+                  </div>
+
+                  {/* CDJ incompatible formats */}
+                  {incompatibleTracks.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FileWarning className="w-3.5 h-3.5 text-accent" />
+                        <p className="text-xs font-semibold text-accent">CDJ / Denon incompatible formats</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        The following tracks use OGG, WMA, or OPUS format. Pioneer CDJ/XDJ and Denon SC hardware
+                        cannot play these formats. Convert to MP3, WAV, or FLAC before exporting to USB.
+                      </p>
+                      <div className="max-h-36 overflow-y-auto space-y-0.5">
+                        {incompatibleTracks.map(t => (
+                          <div key={t.id} className="flex items-center gap-2 px-2 py-1 rounded text-xs bg-accent/5">
+                            <span className="font-mono text-accent px-1 rounded bg-accent/15 uppercase text-[10px] shrink-0">
+                              {t.file_name.split('.').pop()?.toUpperCase()}
+                            </span>
+                            <span className="truncate text-foreground">{t.title}</span>
+                            <span className="truncate text-muted-foreground shrink-0">— {t.artist}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Unknown formats */}
+                  {unknownFormatTracks.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground">Unknown / unrecognised formats ({unknownFormatTracks.length})</p>
+                      <div className="max-h-28 overflow-y-auto space-y-0.5">
+                        {unknownFormatTracks.map(t => (
+                          <div key={t.id} className="flex items-center gap-2 px-2 py-1 rounded text-xs bg-secondary/40">
+                            <span className="font-mono text-muted-foreground px-1 rounded bg-secondary uppercase text-[10px] shrink-0">
+                              {t.file_name.split('.').pop()?.toUpperCase() || '?'}
+                            </span>
+                            <span className="truncate text-foreground">{t.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {incompatibleTracks.length === 0 && unknownFormatTracks.length === 0 && (
+                    <div className="flex items-center gap-2 text-primary text-sm py-2">
+                      <ShieldAlert className="w-4 h-4" />
+                      All tracks use CDJ/Denon-compatible formats — your library is export-ready!
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>

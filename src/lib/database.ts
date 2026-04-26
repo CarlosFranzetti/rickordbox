@@ -392,17 +392,85 @@ export interface ExportManifest {
   playlistEntries: { playlistName: string; tracks: { pioneerTrackId: number; path: string }[] }[];
   totalSize: number;
   trackCount: number;
+  deviceProfile: DeviceProfile;
 }
 
-export async function generateExportManifest(playlistIds: number[]): Promise<ExportManifest> {
+export type DeviceProfile = 'pioneer' | 'denon' | 'generic';
+
+export interface DeviceProfileConfig {
+  id: DeviceProfile;
+  name: string;
+  description: string;
+  supportedFormats: string[];
+}
+
+export const DEVICE_PROFILES: Record<DeviceProfile, DeviceProfileConfig> = {
+  pioneer: {
+    id: 'pioneer',
+    name: 'Pioneer CDJ / XDJ',
+    description: 'CDJ-2000NXS2, CDJ-3000, XDJ-RX3, XDJ-XZ — rekordbox USB format',
+    supportedFormats: ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'aac'],
+  },
+  denon: {
+    id: 'denon',
+    name: 'Denon Engine OS',
+    description: 'SC6000, SC5000, Prime 4, Prime Go — Engine Library format',
+    supportedFormats: ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'aac'],
+  },
+  generic: {
+    id: 'generic',
+    name: 'Generic USB (flat copy)',
+    description: 'Any media player — plain numbered files in /music/',
+    supportedFormats: ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'aac', 'ogg'],
+  },
+};
+
+function getDeviceFolders(profile: DeviceProfile): string[] {
+  switch (profile) {
+    case 'denon':
+      return ['/Engine Library', '/Engine Library/Music', '/Engine Library/Playlists'];
+    case 'generic':
+      return ['/music'];
+    default:
+      return ['/PIONEER', '/PIONEER/rekordbox', '/PIONEER/USBANLZ'];
+  }
+}
+
+function getDeviceTrackPath(profile: DeviceProfile, trackNum: number, ext: string): string {
+  switch (profile) {
+    case 'denon':
+      return `/Engine Library/Music/${String(trackNum).padStart(5, '0')}/track.${ext}`;
+    case 'generic':
+      return `/music/${String(trackNum).padStart(5, '0')}.${ext}`;
+    default:
+      return `/Contents/${String(trackNum).padStart(5, '0')}/track.${ext}`;
+  }
+}
+
+function getDeviceBasePath(profile: DeviceProfile): string {
+  switch (profile) {
+    case 'denon':
+      return '/Engine Library/';
+    case 'generic':
+      return '/music/';
+    default:
+      return '/PIONEER/rekordbox/';
+  }
+}
+
+export async function generateExportManifest(
+  playlistIds: number[],
+  deviceProfile: DeviceProfile = 'pioneer'
+): Promise<ExportManifest> {
   const db = await getDatabase();
   const manifest: ExportManifest = {
-    basePath: '/PIONEER/rekordbox/',
-    folders: ['/PIONEER', '/PIONEER/rekordbox', '/PIONEER/USBANLZ'],
+    basePath: getDeviceBasePath(deviceProfile),
+    folders: getDeviceFolders(deviceProfile),
     files: [],
     playlistEntries: [],
     totalSize: 0,
     trackCount: 0,
+    deviceProfile,
   };
 
   let pioneerTrackId = 1;
@@ -422,13 +490,15 @@ export async function generateExportManifest(playlistIds: number[]): Promise<Exp
       if (!trackIdMap.has(track.id)) {
         trackIdMap.set(track.id, pioneerTrackId);
         const ext = track.file_name.split('.').pop() || 'mp3';
-        const destPath = `/Contents/${String(pioneerTrackId).padStart(5, '0')}/track.${ext}`;
+        const destPath = getDeviceTrackPath(deviceProfile, pioneerTrackId, ext);
         manifest.files.push({
           source: track.file_path,
           destination: destPath,
           trackId: track.id,
         });
-        manifest.folders.push(`/Contents/${String(pioneerTrackId).padStart(5, '0')}`);
+        if (deviceProfile !== 'generic') {
+          manifest.folders.push(destPath.split('/').slice(0, -1).join('/'));
+        }
         manifest.totalSize += track.file_size;
         manifest.trackCount++;
         pioneerTrackId++;

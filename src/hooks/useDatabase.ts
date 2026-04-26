@@ -182,8 +182,8 @@ export function useDatabase() {
     [refresh]
   );
 
-  const handleGenerateExport = useCallback(async (playlistIds: number[]) => {
-    return generateExportManifest(playlistIds);
+  const handleGenerateExport = useCallback(async (playlistIds: number[], deviceProfile?: import('@/lib/database').DeviceProfile) => {
+    return generateExportManifest(playlistIds, deviceProfile);
   }, []);
 
   const handleBackup = useCallback(() => {

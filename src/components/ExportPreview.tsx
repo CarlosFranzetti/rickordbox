@@ -1,18 +1,20 @@
 import { useState } from 'react';
-import { HardDrive, FolderTree, FileAudio, ListMusic, ChevronRight, Download, AlertTriangle } from 'lucide-react';
+import { HardDrive, FolderTree, FileAudio, ListMusic, ChevronRight, AlertTriangle, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { Playlist, ExportManifest } from '@/lib/database';
+import type { Playlist, ExportManifest, DeviceProfile } from '@/lib/database';
+import { DEVICE_PROFILES } from '@/lib/database';
 
 interface ExportPreviewProps {
   playlists: Playlist[];
-  onGenerateExport: (playlistIds: number[]) => Promise<ExportManifest>;
+  onGenerateExport: (playlistIds: number[], deviceProfile?: DeviceProfile) => Promise<ExportManifest>;
 }
 
 export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProps) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [manifest, setManifest] = useState<ExportManifest | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [deviceProfile, setDeviceProfile] = useState<DeviceProfile>('pioneer');
 
   const togglePlaylist = (id: number) => {
     setSelectedIds((prev) => {
@@ -25,7 +27,7 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
 
   const handleGenerate = async () => {
     setGenerating(true);
-    const m = await onGenerateExport(Array.from(selectedIds));
+    const m = await onGenerateExport(Array.from(selectedIds), deviceProfile);
     setManifest(m);
     setGenerating(false);
   };
@@ -39,15 +41,60 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 gap-6">
+    <div className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto">
       <div>
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
           <HardDrive className="w-5 h-5 text-primary" />
           USB Export
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Export copies your tracks to the USB in the proper rekordbox folder structure and generates the hardware-readable database (export.pdb).
+          Export copies your tracks to the USB in the proper folder structure for your hardware.
         </p>
+      </div>
+
+      {/* Speed advantage banner */}
+      <div className="flex items-start gap-3 bg-primary/10 border border-primary/20 rounded-lg p-3">
+        <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+        <div className="text-xs space-y-0.5">
+          <p className="text-foreground font-medium">Up to 10× faster than rekordbox</p>
+          <p className="text-muted-foreground">
+            rickordbox skips beat grid analysis, waveform generation, and memory cue pre-processing —
+            so your USB is ready in seconds, not minutes.
+          </p>
+        </div>
+      </div>
+
+      {/* Device profile selector */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Target Device</p>
+        <div className="grid gap-2">
+          {(Object.values(DEVICE_PROFILES) as typeof DEVICE_PROFILES[DeviceProfile][]).map((profile) => (
+            <label
+              key={profile.id}
+              className={`flex items-start gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors ${
+                deviceProfile === profile.id
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border bg-card hover:bg-secondary/40'
+              }`}
+            >
+              <input
+                type="radio"
+                name="deviceProfile"
+                value={profile.id}
+                checked={deviceProfile === profile.id}
+                onChange={() => { setDeviceProfile(profile.id); setManifest(null); }}
+                className="mt-0.5 accent-primary"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">{profile.name}</p>
+                <p className="text-xs text-muted-foreground">{profile.description}</p>
+                <p className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                  Formats: {profile.supportedFormats.join(', ')}
+                </p>
+              </div>
+            </label>
+          ))}
+        </div>
       </div>
 
       {/* How it works */}
@@ -55,9 +102,23 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
         <p className="text-foreground font-medium text-sm">How export works</p>
         <ul className="space-y-1 list-disc pl-4">
           <li>Original files are <span className="text-primary">copied</span> to the USB — never moved or deleted</li>
-          <li>Tracks are organized into <span className="font-mono text-foreground">/Contents/00001/track.mp3</span> structure</li>
-          <li>A Pioneer-compatible <span className="font-mono text-foreground">export.pdb</span> database is generated for CDJ hardware</li>
+          {deviceProfile === 'pioneer' && (
+            <>
+              <li>Tracks are organized into <span className="font-mono text-foreground">/Contents/00001/track.mp3</span> structure</li>
+              <li>A Pioneer-compatible <span className="font-mono text-foreground">export.pdb</span> database is generated for CDJ hardware</li>
+            </>
+          )}
+          {deviceProfile === 'denon' && (
+            <>
+              <li>Tracks are organized into <span className="font-mono text-foreground">/Engine Library/Music/00001/</span> structure</li>
+              <li>An Engine OS compatible database is generated for Denon hardware</li>
+            </>
+          )}
+          {deviceProfile === 'generic' && (
+            <li>Tracks are copied as numbered files into <span className="font-mono text-foreground">/music/</span></li>
+          )}
           <li>Playlist order and metadata (BPM, key, etc.) are preserved</li>
+          <li><span className="text-primary">No beat grid or waveform analysis</span> — transfers finish immediately</li>
         </ul>
       </div>
 
@@ -137,7 +198,7 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
           {/* Playlist entries */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Playlist Entries (export.pdb)
+              Playlist Entries
             </p>
             {manifest.playlistEntries.map((pe, i) => (
               <div key={i} className="text-xs">
@@ -150,7 +211,7 @@ export function ExportPreview({ playlists, onGenerateExport }: ExportPreviewProp
           <div className="flex items-start gap-2 text-[10px] text-muted-foreground border-t border-border pt-3">
             <AlertTriangle className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
             <span>
-              Full USB export with file copying and PDB generation requires the File System Access API or a local backend. 
+              Full USB export with file copying and database generation requires the File System Access API or a local backend.
               The preview shows the exact structure that will be written to your USB drive.
             </span>
           </div>

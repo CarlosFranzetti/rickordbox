@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Upload, FileAudio, FolderOpen, Check, AlertCircle, ListMusic, Loader2 } from 'lucide-react';
+import { Upload, FileAudio, FolderOpen, Check, AlertCircle, ListMusic, Loader2, Zap, HardDriveDownload, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Track } from '@/lib/database';
@@ -44,7 +44,10 @@ interface ScanBackupSnapshot {
   playlistCount: number;
 }
 
-const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'ogg', 'wma'];
+const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'aac', 'ogg', 'wma', 'opus'];
+
+// Formats that may not play on CDJ/XDJ hardware
+const CDJ_INCOMPATIBLE_EXTS = ['ogg', 'wma', 'opus'];
 
 function isAudioFile(name: string): boolean {
   const ext = name.split('.').pop()?.toLowerCase();
@@ -218,12 +221,14 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
   const [progress, setProgress] = useState({ current: 0, total: 0, phase: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const usbRecoveryRef = useRef<HTMLInputElement>(null);
 
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const [pendingBasePaths, setPendingBasePaths] = useState<Map<File, string> | null>(null);
   const [folderPlaylists, setFolderPlaylists] = useState<FolderPlaylist[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [showFolderStep, setShowFolderStep] = useState(false);
+  const [mode, setMode] = useState<'import' | 'recovery'>('import');
 
   const runImport = useCallback(
     async (files: File[], basePaths?: Map<File, string>, activeSelectedFolders: Set<string> = new Set()) => {
@@ -432,7 +437,33 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
     });
   };
 
+  // USB Recovery: scan a selected folder for audio files (including rekordbox /Contents/ structure)
+  const handleUsbRecovery = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files || e.target.files.length === 0) return;
+      const files = Array.from(e.target.files);
+      const basePaths = new Map<File, string>();
+
+      files.forEach((file) => {
+        const relPath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+        basePaths.set(file, normalizeRelativePath(relPath));
+      });
+
+      // Register for playback
+      onRegisterFiles?.(files.filter((f) => isAudioFile(f.name)));
+
+      // For USB recovery we skip the folder-playlist step and import directly
+      await runImport(files, basePaths, new Set());
+      e.target.value = '';
+    },
+    [runImport, onRegisterFiles]
+  );
+
   const audioResults = results.filter((result) => result.status === 'success' || result.status === 'error');
+  const incompatibleResults = audioResults.filter((r) => {
+    const ext = r.fileName.split('.').pop()?.toLowerCase() || '';
+    return CDJ_INCOMPATIBLE_EXTS.includes(ext);
+  });
 
   return (
     <div className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto">
@@ -443,7 +474,41 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
         </p>
       </div>
 
-      {showFolderStep && !importing && (
+      {/* Speed advantage banner */}
+      <div className="flex items-start gap-3 bg-primary/10 border border-primary/20 rounded-lg p-3">
+        <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+        <div className="text-xs space-y-0.5">
+          <p className="text-foreground font-medium">Up to 10× faster than rekordbox</p>
+          <p className="text-muted-foreground">
+            No beat grid analysis, no waveform generation, no memory cue pre-processing —
+            imports finish in seconds regardless of library size.
+          </p>
+        </div>
+      </div>
+
+      {/* Mode tabs */}
+      <div className="flex gap-1 border-b border-border pb-0">
+        <button
+          onClick={() => { setMode('import'); setResults([]); }}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
+            mode === 'import' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Import Files
+        </button>
+        <button
+          onClick={() => { setMode('recovery'); setResults([]); }}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] flex items-center gap-1.5 ${
+            mode === 'recovery' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <HardDriveDownload className="w-3.5 h-3.5" />
+          USB Recovery
+        </button>
+      </div>
+
+      {/* Import mode */}
+      {mode === 'import' && showFolderStep && !importing && (
         <div className="bg-card border border-border rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
             <ListMusic className="w-5 h-5 text-primary" />
@@ -503,7 +568,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
         </div>
       )}
 
-      {!showFolderStep && (
+      {mode === 'import' && !showFolderStep && (
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -517,7 +582,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
           <div className="text-center">
             <p className="text-sm text-foreground">Drag & drop audio files or folders here</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Supports MP3, WAV, FLAC, AIFF, M4A • Metadata auto-read • Root + subfolder playlists
+              Supports MP3, WAV, FLAC, AIFF, M4A, AAC, OGG, WMA, OPUS • Metadata auto-read • Root + subfolder playlists
             </p>
           </div>
           <div className="flex gap-2">
@@ -544,7 +609,7 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".mp3,.wav,.flac,.aiff,.aif,.m4a,.ogg,.wma"
+            accept=".mp3,.wav,.flac,.aiff,.aif,.m4a,.aac,.ogg,.wma,.opus"
             className="hidden"
             onChange={(e) => {
               if (e.target.files) {
@@ -561,6 +626,41 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
             multiple
             className="hidden"
             onChange={handleFolderInput}
+          />
+        </div>
+      )}
+
+      {/* USB Recovery mode */}
+      {mode === 'recovery' && !importing && (
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-lg p-4 space-y-2 text-xs text-muted-foreground">
+            <p className="text-foreground font-medium text-sm flex items-center gap-2">
+              <HardDriveDownload className="w-4 h-4 text-primary" />
+              Recover tracks from a USB drive
+            </p>
+            <ul className="space-y-1 list-disc pl-4">
+              <li>Select your USB drive root folder (or any folder with audio files)</li>
+              <li>rickordbox will scan all subfolders including Pioneer <span className="font-mono text-foreground">/Contents/</span> and Denon <span className="font-mono text-foreground">/Engine Library/Music/</span> structures</li>
+              <li>All found audio files are re-imported with their embedded metadata</li>
+              <li>Existing tracks (same file path) are updated rather than duplicated</li>
+            </ul>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => usbRecoveryRef.current?.click()}
+            disabled={importing}
+          >
+            <HardDriveDownload className="w-4 h-4 mr-2" />
+            Select USB / Folder to Recover
+          </Button>
+          <input
+            ref={usbRecoveryRef}
+            type="file"
+            // @ts-expect-error webkitdirectory is non-standard
+            webkitdirectory=""
+            multiple
+            className="hidden"
+            onChange={handleUsbRecovery}
           />
         </div>
       )}
@@ -584,8 +684,21 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
       )}
 
       {audioResults.length > 0 && !importing && (
-        <div className="space-y-1">
-          <p className="panel-header">Imported {audioResults.filter((result) => result.status === 'success').length} tracks</p>
+        <div className="space-y-2">
+          <p className="panel-header">
+            {mode === 'recovery' ? 'Recovered' : 'Imported'}{' '}
+            {audioResults.filter((result) => result.status === 'success').length} tracks
+          </p>
+          {incompatibleResults.length > 0 && (
+            <div className="flex items-start gap-2 bg-accent/10 border border-accent/20 rounded-md px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground">
+                <span className="text-accent font-medium">{incompatibleResults.length} track{incompatibleResults.length !== 1 ? 's' : ''}</span>{' '}
+                use OGG, WMA, or OPUS format which may not play on Pioneer CDJ/XDJ or Denon hardware.
+                Consider converting them to MP3, WAV, or FLAC before exporting to USB.
+              </p>
+            </div>
+          )}
           <div className="max-h-60 overflow-y-auto">
             {audioResults.map((result, idx) => (
               <div key={idx} className="flex items-center gap-2 px-4 py-1.5 text-sm">
@@ -596,6 +709,9 @@ export function FileImporter({ onImport, onImportComplete, onCreatePlaylist, onA
                 )}
                 <FileAudio className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <span className="truncate flex-1">{result.fileName}</span>
+                {CDJ_INCOMPATIBLE_EXTS.includes(result.fileName.split('.').pop()?.toLowerCase() || '') && result.status === 'success' && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-accent/20 text-accent shrink-0">CDJ incompatible</span>
+                )}
                 {result.message && <span className="text-xs text-muted-foreground">{result.message}</span>}
               </div>
             ))}
